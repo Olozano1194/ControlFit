@@ -19,7 +19,6 @@ import MemberFormDay from './pages/admin/registroPorDia/MemberFormDay';
 import ListMemberShips from './pages/admin/memberShips/ListMemberShips';
 import MemberShipsForm from './pages/admin/memberShips/MemberShipsForm';
 //Asignación membresías
-import AsignarMemberShipsForm from './pages/admin/asignadaMemberShips/AsignarMemberShipsForm';
 import ListAsignarMemberShips from './pages/admin/asignadaMemberShips/ListAsignarMemberShips';
 //Notificaciones
 import NotificationsPage from './pages/admin/notifications/NotificationsPage';
@@ -55,9 +54,7 @@ function App() {
           <Route path="memberships-list" element={<ListMemberShips />} />
           <Route path="membresia/:id" element={<MemberShipsForm />} />
           {/* Asignación Membresía */}
-          <Route path="asignar-membresia" element={<AsignarMemberShipsForm /> } />
           <Route path="asignar-membresia-list" element={<ListAsignarMemberShips /> } />
-          <Route path="asignar-membresia/:id" element={<AsignarMemberShipsForm />} />
           {/* Notificaciones */}
           <Route path="notifications" element={<NotificationsPage />} />
         </Route> 
