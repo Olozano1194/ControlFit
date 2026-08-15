@@ -229,7 +229,7 @@ const ListAsignarMemberShips = () => {
                         )}
                         <ActionButtons
                             id={id}
-                            editPath={`/dashboard/asignar-membresia/${id}`}
+                            editPath={`/dashboard/miembro/${id}`}
                             onDelete={async (id) => { await deleteAsignarMemberShips(id);
                             setAsignarMemberShips(asignarMemberShips.filter(asignarmemberShips => asignarmemberShips.id !== id)); 
                             }}

@@ -60,7 +60,6 @@ export const sidebarMenus: SidebarMenu[] = [
     title: "Asignar Membresía",
     icon: <FaCreditCard />,
     items: [
-      { label: "Asignar Membresía", to: "asignar-membresia" },
       { label: "Ver Asignaciones", to: "asignar-membresia-list" },
     ],
     roles: ['admin', 'recepcion']
