@@ -14,6 +14,7 @@ import {
     UpdateEventoDto,
 } from '../../../model/calendario.model';
 import { Input, Label, Select } from '../../../components/ui/index';
+import { toLocalInputValue } from './dateTime';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -22,6 +23,7 @@ interface EventoFormProps {
     onClose: () => void;
     event?: EventoCalendario | null;
     onSuccess: () => void;
+    initialDates?: { start: string; end: string };
 }
 
 interface FormData {
@@ -36,7 +38,7 @@ interface FormData {
 
 // ─── Componente ──────────────────────────────────────────────────────────────
 
-const EventoForm = ({ isOpen, onClose, event, onSuccess }: EventoFormProps) => {
+const EventoForm = ({ isOpen, onClose, event, onSuccess, initialDates }: EventoFormProps) => {
     const [tipos, setTipos] = useState<TipoEvento[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const isEditing = !!event;
@@ -71,12 +73,23 @@ const EventoForm = ({ isOpen, onClose, event, onSuccess }: EventoFormProps) => {
         if (event) {
             reset({
                 titulo: event.titulo,
-                fecha_inicio: event.fecha_inicio.slice(0, 16),
-                fecha_fin: event.fecha_fin.slice(0, 16),
+                fecha_inicio: toLocalInputValue(new Date(event.fecha_inicio)),
+                fecha_fin: toLocalInputValue(new Date(event.fecha_fin)),
                 descripcion: event.descripcion || '',
                 tipo: event.tipo?.toString() || '',
                 relacion_tipo: event.relacion_tipo || '',
                 relacion_id: event.relacion_id?.toString() || '',
+            });
+        } else if (initialDates) {
+            // Prefill desde el slot clickeado (creación) — ya viene en hora local
+            reset({
+                titulo: '',
+                fecha_inicio: initialDates.start.slice(0, 16),
+                fecha_fin: initialDates.end.slice(0, 16),
+                descripcion: '',
+                tipo: '',
+                relacion_tipo: '',
+                relacion_id: '',
             });
         } else {
             reset({
@@ -89,7 +102,7 @@ const EventoForm = ({ isOpen, onClose, event, onSuccess }: EventoFormProps) => {
                 relacion_id: '',
             });
         }
-    }, [isOpen, event, reset]);
+    }, [isOpen, event, initialDates, reset]);
 
     // ── Submit ───────────────────────────────────────────────────────────────
 
