@@ -33,7 +33,7 @@ interface CalendarEvent extends Event {
 
 const CalendarioPage = () => {
     const [eventos, setEventos] = useState<EventoCalendario[]>([]);
-    const [tipos, setTipos] = useState<TipoEvento[]>([]);
+    const [_tipos, setTipos] = useState<TipoEvento[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
 
@@ -158,7 +158,7 @@ const CalendarioPage = () => {
                             time: 'Hora',
                             event: 'Evento',
                             noEventsInRange: 'No hay eventos en este rango',
-                            showMore: (count) => `+${count} más`,
+                            showMore: (count: number) => `+${count} más`,
                         }}
                         eventPropGetter={eventPropGetter}
                         onSelectEvent={handleSelectEvent}
@@ -251,5 +251,4 @@ const CalendarioPage = () => {
         </main>
     );
 };
-
 export default CalendarioPage;

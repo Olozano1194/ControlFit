@@ -8,4 +8,10 @@ export default defineConfig({
     react(),
     tailwindcss()
   ],
+  server: {
+    watch: {
+      // Ignore the corrupted leftover folder until it can be deleted (chkdsk /f).
+      ignored: ['**/node_modules_corrupto/**'],
+    },
+  },
 })

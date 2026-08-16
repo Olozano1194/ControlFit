@@ -1,0 +1,59 @@
+# openspec/config.yaml — SDD project configuration for ControlFit
+schema: spec-driven
+
+context: |
+  Monorepo gym-management app (ControlFit).
+  Backend: Django 5.1 + DRF 3.15 + SimpleJWT, app `gimnasioApp`, settings in `gimnasio/settings.py`.
+  Frontend: React 18 + Vite + TypeScript + Tailwind 4, in `gimnasioReact/`.
+  Multi-tenant: every model carries `gimnasio` FK; `GimnasioMiddleware` sets `request.gimnasio`;
+  viewsets use `MultiTenantViewSetMixin` (get_queryset filter + perform_create/update save gimnasio).
+  API base `/gym/api/v1/`; DRF DefaultRouter in `gimnasioApp/urls.py`; JWT auth, IsAuthenticated default.
+  Frontend calendar contract (existing, NOT yet implemented in backend):
+    /gym/api/v1/TiposEvento/ (CRUD), /gym/api/v1/CalendarioEventos/ (CRUD, ?start=&end= range),
+    public /api/calendario/publico/{gimnasio_id}/. Models expected: TipoEvento (nombre, color),
+    EventoCalendario (titulo, fecha_inicio, fecha_fin, descripcion, tipo FK nullable, relacion_tipo,
+    relacion_id, created_by, gimnasio, created_at).
+  Pending change: backend calendar module (models TipoEvento + EventoCalendario, serializers,
+  viewsets, urls) to make existing frontend work.
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Multi-tenant: every requirement MUST state gimnasio scoping and who may access
+  design:
+    - Follow existing patterns: `gimnasio` FK + MultiTenantViewSetMixin, DefaultRouter registration
+    - Document architecture decisions with rationale
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+  apply:
+    guidelines:
+      - Follow existing code patterns (camelCase fields like dateInitial, db_table Meta, Spanish comments)
+    tdd: true
+    test_command: "python manage.py test gimnasioApp"
+  verify:
+    test_command: "python manage.py test gimnasioApp"
+    build_command: "python manage.py check"
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
+
+testing:
+  strict_tdd: true
+  backend:
+    runner: "django test runner (unittest TestCase)"
+    command: "python manage.py test gimnasioApp"
+    layers:
+      unit: "django.test.TestCase"
+      integration: "rest_framework.test.APIRequestFactory + force_authenticate"
+      e2e: false
+    coverage: false
+    linter: false
+  frontend:
+    runner: false
+    linter: "eslint (npm run lint)"
+    typechecker: "tsc (npm run build)"
+    formatter: false

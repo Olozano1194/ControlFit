@@ -1,0 +1,226 @@
+# Design: Backend Calendar Module
+
+## Technical Approach
+
+Add `TipoEvento` and `EventoCalendario` models following the project's multi-tenant pattern (`gimnasio` FK + `created_at` + `db_table`). Wire serializers, viewsets (`MultiTenantViewSetMixin`), and a public `APIView` to match the existing frontend contract in `calendario.model.ts` and `calendario.api.ts`. No changes to existing models or views.
+
+## Architecture Decisions
+
+### Decision: Model pattern — follow existing convention exactly
+
+**Choice**: `gimnasio` FK with `related_name`, `db_table` Meta, `created_at = DateTimeField(auto_now_add=True)`, `ordering` in Meta.
+**Alternatives considered**: Abstract base model for tenant fields (DRY); separate app for calendar.
+**Rationale**: Existing models (`Membresia`, `UsuarioGym`, etc.) all use the inline FK pattern. Introducing an abstract base now adds indirection without benefit — the project has 6 models, all consistent. A separate app would break the single-app structure. Follow the existing convention.
+
+### Decision: Permission split — IsAdminUser for TipoEvento, IsRecepcionUser for EventoCalendario
+
+**Choice**: `TipoEventoViewSet` uses `[IsAuthenticated, IsAdminUser]`; `EventoCalendarioViewSet` uses `[IsAuthenticated, IsRecepcionUser]`.
+**Alternatives considered**: Single permission for both; custom permission class.
+**Rationale**: Matches the product decision. `IsRecepcionUser` already allows admin + recepcion with DELETE restriction on recepcion (line 28, permissions.py). `IsAdminUser` is a clean fit for event type management.
+
+### Decision: Range filter — query-param overlap in get_queryset
+
+**Choice**: Override `get_queryset` to apply `fecha_inicio__lte=end AND fecha_fin__gte=start` when `?start=&end=` params are present. Default: return all, ordered by `fecha_inicio` ascending.
+**Alternatives considered**: django-filter `DateFilter`/`DateTimeFilter`; separate endpoint for range queries.
+**Rationale**: The existing viewsets don't use django-filter for custom logic (only `SearchFilter` on `UsuarioGymViewSet`). A simple queryset filter in `get_queryset` is consistent with how `MembresiaAsignadaViewSet.get_queryset` adds ad-hoc filters. Overlap semantics are pinned in spec.
+
+### Decision: Public endpoint — standalone APIView, not under router
+
+**Choice**: `PublicCalendarioView(APIView)` with `AllowAny`, registered at `api/calendario/publico/<int:gimnasio_id>/`. Uses `get_object_or_404(Gimnasio, pk=gimnasio_id)` then filters `EventoCalendario.objects.filter(gimnasio=gimnasio).order_by('fecha_inicio')`.
+**Alternatives considered**: Router action with custom permission; separate URL under `/gym/api/v1/`.
+**Rationale**: The frontend contract (`calendario.api.ts` line 83-95) explicitly strips `/gym/api/v1` from the base URL. The spec requires NOT under `/gym/api/v1`. A standalone `APIView` is the cleanest way — no authentication middleware interference, no router prefix. `get_object_or_404` handles the 404 case cleanly.
+
+### Decision: created_by — auto-set in perform_create
+
+**Choice**: Override `perform_create` on `EventoCalendarioViewSet` to call `serializer.save(gimnasio=request.gimnasio, created_by=request.user)`.
+**Alternatives considered**: Set in serializer `create()` method; signal.
+**Rationale**: The `MultiTenantViewSetMixin.perform_create` already sets `gimnasio`. Overriding and calling `super().perform_create()` (which calls `serializer.save(gimnasio=...)`) would double-set. Instead, override fully: `serializer.save(gimnasio=self.request.gimnasio, created_by=self.request.user)`. This is explicit and follows the pattern where viewsets override `perform_create` for extra fields.
+
+## Data Flow
+
+```
+Frontend (calendario.api.ts)
+  │
+  ├─ GET/POST/PUT/DELETE /gym/api/v1/TiposEvento/
+  │       └─ TipoEventoViewSet (IsAdminUser)
+  │           └─ MultiTenantViewSetMixin → filter by request.gimnasio
+  │
+  ├─ GET/POST/PUT/DELETE /gym/api/v1/CalendarioEventos/?start=&end=
+  │       └─ EventoCalendarioViewSet (IsRecepcionUser)
+  │           ├─ get_queryset: filter by gimnasio + overlap
+  │           └─ perform_create: set gimnasio + created_by
+  │
+  └─ GET /api/calendario/publico/{gimnasio_id}/
+          └─ PublicCalendarioView (AllowAny)
+              ├─ get_object_or_404(Gimnasio, pk=gimnasio_id)
+              └─ EventoCalendario.objects.filter(gimnasio=...).order_by('fecha_inicio')
+```
+
+## File Changes
+
+| File | Action | Description |
+|------|--------|-------------|
+| `gimnasioApp/models.py` | Modify | +2 models: `TipoEvento`, `EventoCalendario` (~65 lines) |
+| `gimnasioApp/serializers.py` | Modify | +3 serializers: `TipoEventoSerializer`, `TipoEventoSimpleSerializer`, `EventoCalendarioSerializer` (~55 lines) |
+| `gimnasioApp/views.py` | Modify | +2 viewsets, +1 APIView (~45 lines) |
+| `gimnasioApp/urls.py` | Modify | +2 router registrations, +1 public path (~10 lines) |
+| `gimnasioApp/migrations/000X_*.py` | Create | Auto-generated by `makemigrations` (~50 lines) |
+| `gimnasioApp/tests.py` | Modify | +calendar test classes (~170 lines) |
+
+## Interfaces / Contracts
+
+### Models
+
+```python
+class TipoEvento(models.Model):
+    nombre = models.CharField(max_length=100)
+    color = models.CharField(max_length=7)  # e.g. #FF0000
+    gimnasio = models.ForeignKey(Gimnasio, on_delete=models.CASCADE, related_name='tipos_evento')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'tipo_evento'
+        ordering = ['nombre']
+
+class EventoCalendario(models.Model):
+    titulo = models.CharField(max_length=200)
+    fecha_inicio = models.DateTimeField()
+    fecha_fin = models.DateTimeField()
+    descripcion = models.TextField(blank=True, default='')
+    tipo = models.ForeignKey(TipoEvento, on_delete=models.SET_NULL, null=True, blank=True, related_name='eventos')
+    relacion_tipo = models.CharField(max_length=50, blank=True, default='')
+    relacion_id = models.IntegerField(null=True, blank=True)
+    created_by = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True, related_name='eventos_creados')
+    gimnasio = models.ForeignKey(Gimnasio, on_delete=models.CASCADE, related_name='eventos_calendario')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'evento_calendario'
+        ordering = ['fecha_inicio']
+```
+
+### Serializers
+
+```python
+class TipoEventoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TipoEvento
+        fields = ['id', 'nombre', 'color', 'gimnasio', 'created_at']
+        read_only_fields = ('id', 'gimnasio', 'created_at')
+
+class TipoEventoSimpleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TipoEvento
+        fields = ['id', 'nombre', 'color']
+
+class EventoCalendarioSerializer(serializers.ModelSerializer):
+    tipo_detalle = TipoEventoSimpleSerializer(source='tipo', read_only=True)
+
+    class Meta:
+        model = EventoCalendario
+        fields = ['id', 'titulo', 'fecha_inicio', 'fecha_fin', 'descripcion',
+                  'tipo', 'tipo_detalle', 'relacion_tipo', 'relacion_id',
+                  'created_by', 'gimnasio', 'created_at']
+        read_only_fields = ('id', 'gimnasio', 'created_by', 'created_at')
+
+    def validate(self, data):
+        inicio = data.get('fecha_inicio') or (self.instance.fecha_inicio if self.instance else None)
+        fin = data.get('fecha_fin') or (self.instance.fecha_fin if self.instance else None)
+        if inicio and fin and fin <= inicio:
+            raise serializers.ValidationError("fecha_fin must be after fecha_inicio")
+        return data
+```
+
+### ViewSets
+
+```python
+class TipoEventoViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
+    queryset = TipoEvento.objects.all()
+    serializer_class = TipoEventoSerializer
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+class EventoCalendarioViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
+    queryset = EventoCalendario.objects.all()
+    serializer_class = EventoCalendarioSerializer
+    permission_classes = [IsAuthenticated, IsRecepcionUser]
+
+    def get_queryset(self):
+        qs = super().get_queryset().select_related('tipo')
+        start = self.request.query_params.get('start')
+        end = self.request.query_params.get('end')
+        if start and end:
+            qs = qs.filter(fecha_inicio__lte=end, fecha_fin__gte=start)
+        return qs.order_by('fecha_inicio')
+
+    def perform_create(self, serializer):
+        serializer.save(gimnasio=self.request.gimnasio, created_by=self.request.user)
+```
+
+### Public Endpoint
+
+```python
+class PublicCalendarioView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, gimnasio_id):
+        gimnasio = get_object_or_404(Gimnasio, pk=gimnasio_id)
+        eventos = EventoCalendario.objects.filter(
+            gimnasio=gimnasio
+        ).select_related('tipo').order_by('fecha_inicio')
+        serializer = EventoCalendarioSerializer(eventos, many=True)
+        return Response(serializer.data)
+```
+
+### URLs
+
+```python
+# Router (under gym/api/v1/)
+router.register(r'TiposEvento', TipoEventoViewSet, basename='TiposEvento')
+router.register(r'CalendarioEventos', EventoCalendarioViewSet, basename='CalendarioEventos')
+
+# Public (NOT under gym/api/v1/)
+path('api/calendario/publico/<int:gimnasio_id>/', PublicCalendarioView.as_view(), name='calendario-publico'),
+```
+
+### API Contract
+
+| Method | Endpoint | Auth | Request | Response |
+|--------|----------|------|---------|----------|
+| GET | `/gym/api/v1/TiposEvento/` | IsAdminUser | — | `[{id, nombre, color, gimnasio, created_at}]` |
+| POST | `/gym/api/v1/TiposEvento/` | IsAdminUser | `{nombre, color}` | `201 {id, nombre, color, gimnasio, created_at}` |
+| PUT | `/gym/api/v1/TiposEvento/{id}/` | IsAdminUser | `{nombre?, color?}` | `200 {id, nombre, color, gimnasio, created_at}` |
+| DELETE | `/gym/api/v1/TiposEvento/{id}/` | IsAdminUser | — | `204` |
+| GET | `/gym/api/v1/CalendarioEventos/` | IsRecepcionUser | `?start=&end=` | `[{id, titulo, fecha_inicio, fecha_fin, descripcion, tipo, tipo_detalle, ...}]` |
+| POST | `/gym/api/v1/CalendarioEventos/` | IsRecepcionUser | `{titulo, fecha_inicio, fecha_fin, ...}` | `201 {id, ...}` |
+| PUT | `/gym/api/v1/CalendarioEventos/{id}/` | IsRecepcionUser | `{titulo?, ...}` | `200 {id, ...}` |
+| DELETE | `/gym/api/v1/CalendarioEventos/{id}/` | IsRecepcionUser | — | `204` |
+| GET | `/api/calendario/publico/{gimnasio_id}/` | AllowAny | — | `[{id, titulo, ..., tipo_detalle, ...}]` or `404` |
+
+## Testing Strategy
+
+| Layer | What to Test | Approach |
+|-------|-------------|----------|
+| Unit | TipoEvento model (required fields, gimnasio FK) | `TestCase` with direct model creation |
+| Unit | EventoCalendario model (nullable fields, fecha_fin > fecha_inicio) | `TestCase` with model validation |
+| Integration | TipoEventoViewSet CRUD + admin-only permission | `APIRequestFactory` + `force_authenticate`, assert 403 for recepcion |
+| Integration | EventoCalendarioViewSet CRUD + IsRecepcionUser | `APIRequestFactory` + `force_authenticate` |
+| Integration | Range filter overlap semantics | Create events spanning ranges, assert filter returns correct subset |
+| Integration | Cross-gym isolation (both viewsets) | Two gyms, assert each user only sees their gym's data |
+| Integration | Public endpoint returns events for valid gym | `APIRequestFactory` (no auth), assert 200 + correct data |
+| Integration | Public endpoint returns 404 for nonexistent gym | Assert `404` for invalid `gimnasio_id` |
+| Integration | Public endpoint returns 405 for non-GET | Assert `405` for POST/PUT/DELETE |
+| Integration | created_by auto-set | Create event, assert `created_by == request.user` |
+| Integration | tipo_detalle nested representation | Create event with tipo, assert `tipo_detalle` contains `{id, nombre, color}` |
+| Integration | tipo_detalle null when tipo is null | Create event without tipo, assert `tipo_detalle` is null |
+
+## Threat Matrix
+
+N/A — no routing, shell, subprocess, VCS/PR automation, executable-file classification, or process-integration boundary.
+
+## Migration / Rollout
+
+Run `python manage.py makemigrations gimnasioApp` after adding models. This generates a single migration file creating both `tipo_evento` and `evento_calendario` tables. No data migration needed — both tables are new. No feature flags required. `python manage.py check` gates the migration.
+
+## Open Questions
+
+None — all decisions are pinned by the product decisions and spec requirements.

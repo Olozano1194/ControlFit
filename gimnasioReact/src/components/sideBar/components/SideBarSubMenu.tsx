@@ -55,7 +55,7 @@ export const SidebarSubMenu = ({
                 : 'border-l-nav/30 text-nav before:bg-primary before:border-nav hover:text-nav/70'
             }
             before:w-3 before:h-3 before:absolute before:rounded-full
-            before:-left-[6.5px] before:top-1/2 before:-translate-y-1/2
+            before:left-[-6.5px] before:top-1/2 before:-translate-y-1/2
             before:border-4`}
           >
             {item.label}
