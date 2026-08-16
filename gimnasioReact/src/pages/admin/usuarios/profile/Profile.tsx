@@ -159,7 +159,7 @@ const Profile = () => {
                 entityName="este atleta mensual"
             />
             <section className="gap-8 grid grid-cols-1 lg:grid-cols-12">
-                <div className="space-y-8 lg:col-span-6">
+                <div className="space-y-8 md:col-span-6 lg:col-span-8 xl:col-span-11">
                     <section className="bg-surface-container-lowest overflow-hidden p-8 relative rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
                         <div className="absolute p-4 right-0 top-0">
                             <span className="font-black select-none text-[35px] text-slate-50 md:text-[60px]">

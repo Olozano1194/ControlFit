@@ -22,6 +22,8 @@ import MemberShipsForm from './pages/admin/memberShips/MemberShipsForm';
 import ListAsignarMemberShips from './pages/admin/asignadaMemberShips/ListAsignarMemberShips';
 //Notificaciones
 import NotificationsPage from './pages/admin/notifications/NotificationsPage';
+// Calendario
+import CalendarPage from './pages/admin/calendario/CalendarioPage';
 //Ruta protegida
 import ProtectRoute from './routes/protectedRoute/ProtectRoute';
 
@@ -57,11 +59,12 @@ function App() {
           <Route path="asignar-membresia-list" element={<ListAsignarMemberShips /> } />
           {/* Notificaciones */}
           <Route path="notifications" element={<NotificationsPage />} />
+          {/* Calendario */}
+          <Route path="calendar" element={<CalendarPage />} />
         </Route> 
       </Route>       
       <Route path="*" element={<Error404 />} />
     </Routes> 
   )
 }
-
 export default App

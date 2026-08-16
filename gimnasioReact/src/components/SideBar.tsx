@@ -55,7 +55,7 @@ const SideBar = () => {
                 setShowSubMenu((prev) => ({ ...prev, [menu.key]: true }));
             }
         }
-    }, [location.pathname]);
+    }, [location.pathname, showSubMenu]);
 
     // Esta función nos sirve para cerrar la sesión
     const handleLogOut = () => {
@@ -67,15 +67,20 @@ const SideBar = () => {
     const formatRole = (role: string): string =>
         role.charAt(0).toUpperCase() + role.slice(1);
 
+    // Función para cerrar el menú al hacer clic en un enlace
+    useEffect(() => {
+        setToggleMenu(false);
+    }, [location.pathname]);
+
     return (
         <>
             <div
-                className={`bg-slate-50  border-r border-slate-100 duration-200 ease-in-out fixed flex flex-col justify-between h-full px-3 py-6 top-0 transition-all w-64 z-50 md:w-[40%] lg:w-[35%] xl:w-auto xl:h-screen xl:static ${toggleMenu ? "left-0" : "-left-full"}`}
+                className={`bg-slate-50  border-r border-slate-100 duration-200 ease-in-out fixed flex flex-col justify-between h-full px-3 py-6 overflow-y-scroll top-0 transition-all w-64 z-50 md:w-[40%] lg:w-[35%] xl:w-auto xl:h-screen xl:static ${toggleMenu ? "left-0" : "-left-full"}`}
             >
                 {/* Menu */}
                 <div>
                     {/* logo + Name gym */}
-                    <section className="flex flex-col gap-3 items-center mb-10 px-6">
+                    <section className="flex flex-col gap-3 items-center">
                         <FormHeader logo={Logo} title="ControlFit" highlight="Colombia" />
                         <h1 className="text-center text-2xl font-black text-dark mb-10">
                             {firstRole && formatRole(firstRole)}
@@ -88,12 +93,14 @@ const SideBar = () => {
                                 handleToggleSubMenu={handleToggleSubMenu}
                                 showSubmenu={showSubMenu}
                                 currentPath={location.pathname}
+                                
                             />
                         ) : (
                             <SideBarUser
                                 handleToggleSubMenu={handleToggleSubMenu}
                                 showSubmenu={showSubMenu}
                                 currentPath={location.pathname}
+                                
                             />
                         )}
                     </nav>

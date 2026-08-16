@@ -1,9 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap');
 @import "tailwindcss";
-
-
 @theme {
-    --background-image-pulse-gradient: linear-gradient(135deg, #004ac6 0%, #2563eb 100%); 
+    --background-image-pulse-gradient: linear-gradient(135deg, #004ac6 0%, #2563eb 100%);
     --font-roboto: 'Roboto', sans-serif;
     --glass-bg: rgba(248, 249, 255, 0.8);
     --glass-blur: 24px;
@@ -22,7 +20,6 @@
     --color-tertiary: #006242;
     --color-text-error: #ba1a1a;
 }
-
 /* Style Person */
 /* Floating Label Animation */
 .floating-label {
@@ -30,14 +27,12 @@
   font-size: 0.875rem;
   transition: top 0.2s ease, font-size 0.2s ease, color 0.2s ease;
 }
-
 .floating-input:focus ~ .floating-label,
 .floating-input:not(:placeholder-shown) ~ .floating-label {
   top: 0;
   font-size: 0.75rem;
   color: #3b82f6;
 }
-
 .floating-input:not(:focus):not(:placeholder-shown) ~ .floating-label {
-  color: inherit; 
+  color: inherit;
 }

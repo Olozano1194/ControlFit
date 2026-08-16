@@ -5,7 +5,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
     TokenBlacklistView,
 )
-from .views import UserViewSet, userProfileView, UsuarioGymViewSet, UsuarioGymDayViewSet, Home, MembresiaViewSet, MembresiaAsignadaViewSet, PagoMembresiaViewSet, membership_notifications, mark_notifications_read, ActivitiesView, ExportReportView, RegisterViewSet, DashboardStatsView
+from .views import UserViewSet, userProfileView, UsuarioGymViewSet, UsuarioGymDayViewSet, Home, MembresiaViewSet, MembresiaAsignadaViewSet, PagoMembresiaViewSet, membership_notifications, mark_notifications_read, ActivitiesView, ExportReportView, RegisterViewSet, DashboardStatsView, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView
 
 #api versioning
 router = routers.DefaultRouter()
@@ -14,6 +14,8 @@ router.register(r'User', UserViewSet, basename='User')
 router.register(r'UserGymDay', UsuarioGymDayViewSet, basename='UserGymDay')
 router.register(r'MemberShips', MembresiaViewSet, basename='MemberShips')
 router.register(r'MemberShipsAsignada', MembresiaAsignadaViewSet, basename='MemberShipsAsignada')
+router.register(r'TiposEvento', TipoEventoViewSet, basename='TiposEvento')
+router.register(r'CalendarioEventos', EventoCalendarioViewSet, basename='CalendarioEventos')
 
 urlpatterns = [
     path('gym/api/v1/', include(router.urls)),      
@@ -35,4 +37,7 @@ urlpatterns = [
     path('gym/api/v1/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('gym/api/v1/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('gym/api/v1/token/blacklist/', TokenBlacklistView.as_view(), name='token_blacklist'),
+    
+    # Endpoint público de calendario (NO bajo /gym/api/v1)
+    path('api/calendario/publico/<int:gimnasio_id>/', PublicCalendarioView.as_view(), name='calendario-publico'),
 ]

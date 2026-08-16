@@ -42,13 +42,13 @@ const SideBarAdmin = ({ showSubmenu, handleToggleSubMenu, currentPath }: Sidebar
     };
 
     return (
-        <ul className="flex flex-col gap-2">
+        <nav className="flex flex-col gap-2">
             {/* Home */}
             <SidebarItem 
                 to='/dashboard' 
                 icon={<RiHome8Line />} 
                 label='Inicio'
-                isActive={isHomeActive}
+                isActive={isHomeActive}                
             />
             {/* Menus desplegables */}
             {filteredMenus.map(menu => (
@@ -75,11 +75,11 @@ const SideBarAdmin = ({ showSubmenu, handleToggleSubMenu, currentPath }: Sidebar
                 label='Soporte técnico' 
             />
             <SidebarItem 
-                to='#' 
+                to='/dashboard/calendar' 
                 icon={<RiCalendarTodoLine />} 
                 label='Calendario' 
             />        
-        </ul>
+        </nav>
     );
 };
 export default SideBarAdmin;
