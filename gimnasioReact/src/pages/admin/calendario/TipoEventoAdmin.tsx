@@ -5,9 +5,15 @@ import { TipoEvento } from '../../../model/calendario.model';
 import TipoEventoList from './TipoEventoList';
 import TipoEventoForm from './TipoEventoForm';
 
+// ─── Props ───────────────────────────────────────────────────────────────────
+
+interface TipoEventoAdminProps {
+    onSuccess?: () => void;
+}
+
 // ─── Componente ──────────────────────────────────────────────────────────────
 
-const TipoEventoAdmin = () => {
+const TipoEventoAdmin = ({ onSuccess }: TipoEventoAdminProps) => {
     const [tipos, setTipos] = useState<TipoEvento[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -54,7 +60,8 @@ const TipoEventoAdmin = () => {
 
     const handleSuccess = useCallback(() => {
         fetchTipos();
-    }, [fetchTipos]);
+        onSuccess?.();
+    }, [fetchTipos, onSuccess]);
 
     // ── Render ───────────────────────────────────────────────────────────────
 

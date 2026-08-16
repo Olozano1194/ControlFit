@@ -1,12 +1,25 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Calendar, dateFnsLocalizer, Event } from 'react-big-calendar';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Calendar, dateFnsLocalizer, Event, type SlotInfo } from 'react-big-calendar';
+import withDragAndDrop, {
+    type EventInteractionArgs,
+} from 'react-big-calendar/lib/addons/dragAndDrop';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { es } from 'date-fns/locale/es';
 import { toast } from 'react-hot-toast';
 import { IoClose } from 'react-icons/io5';
-import { getEventos, getTiposEvento } from '../../../api/action/calendario.api';
+import {
+    getEventos,
+    getTiposEvento,
+    updateEvento,
+    deleteEvento,
+} from '../../../api/action/calendario.api';
 import { EventoCalendario, TipoEvento } from '../../../model/calendario.model';
+import { useAuth } from '../../../context/useAuth';
+import EventoForm from './EventoForm';
+import TipoEventoAdmin from './TipoEventoAdmin';
+import { toApiISO, toLocalInputValue, normalizeSlotEnd } from './dateTime';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 
 // ─── Localizer ───────────────────────────────────────────────────────────────
 
@@ -32,10 +45,29 @@ interface CalendarEvent extends Event {
 // ─── Componente ──────────────────────────────────────────────────────────────
 
 const CalendarioPage = () => {
+    const { user } = useAuth();
+    const isAdmin = user?.roles?.includes('admin') ?? false;
+
     const [eventos, setEventos] = useState<EventoCalendario[]>([]);
     const [_tipos, setTipos] = useState<TipoEvento[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+    const [isEventoFormOpen, setIsEventoFormOpen] = useState(false);
+    const [editingEvent, setEditingEvent] = useState<EventoCalendario | null>(null);
+    const [isTipoAdminOpen, setIsTipoAdminOpen] = useState(false);
+    const [slotPrefill, setSlotPrefill] = useState<{ start: Date; end: Date } | null>(
+        null
+    );
+
+    // Wrapper condicional: admin obtiene drag & drop, recepción no.
+    // useMemo mantiene la identidad del componente estable entre renders.
+    const DnDCalendar = useMemo(
+        () =>
+            (isAdmin ? withDragAndDrop<CalendarEvent>(Calendar) : Calendar) as ReturnType<
+                typeof withDragAndDrop<CalendarEvent>
+            >,
+        [isAdmin]
+    );
 
     // ── Carga de datos ───────────────────────────────────────────────────────
 
@@ -99,6 +131,42 @@ const CalendarioPage = () => {
         setSelectedEvent(null);
     }, []);
 
+    const handleSelectSlot = useCallback((slotInfo: SlotInfo) => {
+        setSlotPrefill({
+            start: slotInfo.start,
+            end: normalizeSlotEnd(slotInfo.end),
+        });
+        setEditingEvent(null);
+        setIsEventoFormOpen(true);
+    }, []);
+
+    const handleEventFormSuccess = useCallback(() => {
+        fetchData();
+    }, [fetchData]);
+
+    // ── Drag & Drop (admin) ──────────────────────────────────────────────────
+
+    const handleEventDrop = useCallback(
+        async ({ start, end, event }: EventInteractionArgs<CalendarEvent>) => {
+            if (!event.resource?.id) return;
+            try {
+                await updateEvento(event.resource.id, {
+                    fecha_inicio: toApiISO(new Date(start)),
+                    fecha_fin: toApiISO(new Date(end)),
+                });
+                toast.success('Evento actualizado correctamente');
+                fetchData();
+            } catch (error) {
+                const msg =
+                    error instanceof Error ? error.message : 'Error al mover el evento';
+                toast.error(msg);
+            }
+        },
+        [fetchData]
+    );
+
+    const handleEventResize = handleEventDrop;
+
     // ── Formateo de fecha legible ────────────────────────────────────────────
 
     const formatDateTime = (date: Date): string => {
@@ -120,17 +188,26 @@ const CalendarioPage = () => {
                         Gestione y visualice los eventos de su gimnasio.
                     </p>
                 </div>
-                <button
-                    onClick={() => {
-                        // PR 3: Abrir EventoForm para crear nuevo evento
-                        toast('Formulario de creación disponible en la próxima actualización', {
-                            icon: '📋',
-                        });
-                    }}
-                    className="bg-sky-600 cursor-pointer flex font-semibold gap-2 items-center px-5 py-2.5 rounded-lg text-sm text-white transition-colors hover:bg-sky-500"
-                >
-                    + Nuevo Evento
-                </button>
+                <div className="flex flex-wrap gap-3">
+                    {isAdmin && (
+                        <button
+                            onClick={() => setIsTipoAdminOpen(true)}
+                            className="bg-surface-container-high cursor-pointer font-semibold px-5 py-2.5 rounded-lg text-sm text-on-surface transition-colors hover:bg-surface-container-high/80"
+                        >
+                            Gestionar Tipos
+                        </button>
+                    )}
+                    <button
+                        onClick={() => {
+                            setEditingEvent(null);
+                            setSlotPrefill(null);
+                            setIsEventoFormOpen(true);
+                        }}
+                        className="bg-sky-600 cursor-pointer flex font-semibold gap-2 items-center px-5 py-2.5 rounded-lg text-sm text-white transition-colors hover:bg-sky-500"
+                    >
+                        + Nuevo Evento
+                    </button>
+                </div>
             </section>
 
             {/* Calendario */}
@@ -138,7 +215,7 @@ const CalendarioPage = () => {
                 <div className="text-center py-12 text-secondary">Cargando eventos...</div>
             ) : (
                 <section className="bg-surface-container-high rounded-xl p-4">
-                    <Calendar
+                    <DnDCalendar
                         localizer={localizer}
                         events={calendarEvents}
                         startAccessor="start"
@@ -162,6 +239,10 @@ const CalendarioPage = () => {
                         }}
                         eventPropGetter={eventPropGetter}
                         onSelectEvent={handleSelectEvent}
+                        onSelectSlot={handleSelectSlot}
+                        onEventDrop={handleEventDrop}
+                        onEventResize={handleEventResize}
+                        resizable={isAdmin}
                         popup
                         selectable
                     />
@@ -220,31 +301,81 @@ const CalendarioPage = () => {
                             </p>
                         </div>
 
-                        {/* Actions placeholder (PR 3) */}
+                        {/* Acciones */}
                         <div className="flex gap-3 mt-6 pt-4 border-t border-surface-container-high">
                             <button
                                 onClick={() => {
-                                    toast(
-                                        'Editar evento disponible en la próxima actualización',
-                                        { icon: '📋' }
-                                    );
+                                    setEditingEvent(selectedEvent?.resource ?? null);
+                                    setSelectedEvent(null);
+                                    setIsEventoFormOpen(true);
                                 }}
                                 className="flex-1 bg-sky-600 cursor-pointer font-semibold px-4 py-2 rounded-lg text-sm text-white transition-colors hover:bg-sky-500"
                             >
                                 Editar
                             </button>
+                            {isAdmin && (
+                                <button
+                                    onClick={() => {
+                                        const eventId = selectedEvent.resource?.id;
+                                        if (!eventId) return;
+                                        if (!window.confirm('¿Eliminar este evento?')) return;
+                                        deleteEvento(eventId)
+                                            .then(() => {
+                                                toast.success('Evento eliminado correctamente');
+                                                setSelectedEvent(null);
+                                                fetchData();
+                                            })
+                                            .catch((err) =>
+                                                toast.error(
+                                                    err instanceof Error
+                                                        ? err.message
+                                                        : 'Error al eliminar'
+                                                )
+                                            );
+                                    }}
+                                    className="flex-1 bg-red-600 cursor-pointer font-semibold px-4 py-2 rounded-lg text-sm text-white transition-colors hover:bg-red-500"
+                                >
+                                    Eliminar
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de creación/edición de evento */}
+            <EventoForm
+                isOpen={isEventoFormOpen}
+                onClose={() => setIsEventoFormOpen(false)}
+                event={editingEvent}
+                onSuccess={handleEventFormSuccess}
+                initialDates={
+                    slotPrefill
+                        ? {
+                              start: toLocalInputValue(slotPrefill.start),
+                              end: toLocalInputValue(slotPrefill.end),
+                          }
+                        : undefined
+                }
+            />
+
+            {/* Modal de gestión de tipos (admin) */}
+            {isTipoAdminOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <div className="bg-surface-container-lowest rounded-xl shadow-2xl w-full max-w-2xl mx-4 p-6 relative max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xl font-bold text-on-surface">
+                                Gestión de Tipos de Evento
+                            </h3>
                             <button
-                                onClick={() => {
-                                    toast(
-                                        'Eliminar evento disponible en la próxima actualización',
-                                        { icon: '📋' }
-                                    );
-                                }}
-                                className="flex-1 bg-red-600 cursor-pointer font-semibold px-4 py-2 rounded-lg text-sm text-white transition-colors hover:bg-red-500"
+                                onClick={() => setIsTipoAdminOpen(false)}
+                                className="text-secondary cursor-pointer hover:text-on-surface transition-colors"
+                                aria-label="Cerrar"
                             >
-                                Eliminar
+                                <IoClose size={24} />
                             </button>
                         </div>
+                        <TipoEventoAdmin onSuccess={fetchData} />
                     </div>
                 </div>
             )}

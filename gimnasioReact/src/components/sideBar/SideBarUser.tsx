@@ -72,7 +72,7 @@ const SideBarUser: React.FC<SidebarUserProps> = ({ showSubmenu, handleToggleSubM
                 label='Soporte técnico' 
             />
             <SidebarItem 
-                to='#' 
+                to='/dashboard/calendar' 
                 icon={<RiCalendarTodoLine />} 
                 label='Calendario' 
             />        
