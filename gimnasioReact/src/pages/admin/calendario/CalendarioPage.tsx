@@ -10,7 +10,7 @@ import { IoClose } from 'react-icons/io5';
 import {
     getEventos,
     getTiposEvento,
-    updateEvento,
+    patchEvento,
     deleteEvento,
 } from '../../../api/action/calendario.api';
 import { EventoCalendario, TipoEvento } from '../../../model/calendario.model';
@@ -104,22 +104,36 @@ const CalendarioPage = () => {
 
     // ── Estilos por tipo ─────────────────────────────────────────────────────
 
-    const eventPropGetter = useCallback(
-        (event: CalendarEvent) => {
-            const color = event.resource?.tipo_detalle?.color || '#3B82F6';
-            return {
-                style: {
-                    backgroundColor: color,
-                    borderColor: color,
-                    borderRadius: '4px',
-                    color: '#fff',
-                    fontSize: '0.8rem',
-                    border: 'none',
-                },
-            };
-        },
-        []
-    );
+// ─── Estilos por tipo ─────────────────────────────────────────────────────
+
+// Elige texto blanco u oscuro según la luminancia del color de fondo
+// para mantener legibilidad con colores claros (ej: verde claro).
+const getContrastText = (hexColor: string): string => {
+    const hex = hexColor.replace('#', '');
+    if (hex.length !== 6) return '#fff';
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.6 ? '#1f2937' : '#fff';
+};
+
+const eventPropGetter = useCallback(
+    (event: CalendarEvent) => {
+        const color = event.resource?.tipo_detalle?.color || '#3B82F6';
+        return {
+            style: {
+                backgroundColor: color,
+                borderColor: color,
+                borderRadius: '4px',
+                color: getContrastText(color),
+                fontSize: '0.8rem',
+                border: 'none',
+            },
+        };
+    },
+    []
+);
 
     // ── Handlers ─────────────────────────────────────────────────────────────
 
@@ -150,7 +164,7 @@ const CalendarioPage = () => {
         async ({ start, end, event }: EventInteractionArgs<CalendarEvent>) => {
             if (!event.resource?.id) return;
             try {
-                await updateEvento(event.resource.id, {
+                await patchEvento(event.resource.id, {
                     fecha_inicio: toApiISO(new Date(start)),
                     fecha_fin: toApiISO(new Date(end)),
                 });

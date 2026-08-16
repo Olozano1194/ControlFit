@@ -73,6 +73,19 @@ export const updateEvento = async (
     return data;
 };
 
+// Actualización parcial (PATCH) para drag & drop / resize:
+// solo envía los campos que cambian (fechas), sin exigir el objeto completo.
+export const patchEvento = async (
+    id: number,
+    dto: Partial<UpdateEventoDto>
+): Promise<EventoCalendario> => {
+    const { data } = await axiosPrivate.patch<EventoCalendario>(
+        `/CalendarioEventos/${id}/`,
+        dto
+    );
+    return data;
+};
+
 export const deleteEvento = async (id: number): Promise<void> => {
     await axiosPrivate.delete(`/CalendarioEventos/${id}/`);
 };
