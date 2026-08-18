@@ -4,8 +4,8 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
-from .serializers import UsuarioSerializer, UsuarioGymSerializer, UsuarioGymDaySerializer, MembresiasSerializer, MembresiaAsignadaSerializer, PagoMembresiaSerializer, TipoEventoSerializer, EventoCalendarioSerializer
-from .models import Usuario, UsuarioGym, UsuarioGymDay, Membresia, MembresiaAsignada, PagoMembresia, Gimnasio, TipoEvento, EventoCalendario
+from .serializers import UsuarioSerializer, UsuarioGymSerializer, UsuarioGymDaySerializer, MembresiasSerializer, MembresiaAsignadaSerializer, PagoMembresiaSerializer, TipoEventoSerializer, EventoCalendarioSerializer, NotificationSerializer
+from .models import Usuario, UsuarioGym, UsuarioGymDay, Membresia, MembresiaAsignada, PagoMembresia, Gimnasio, TipoEvento, EventoCalendario, Notification
 from django.utils import timezone
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import get_object_or_404
@@ -16,15 +16,16 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
 #Para las notificaciones
 from datetime import datetime, date, timedelta
-from rest_framework.decorators import api_view, permission_classes
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from django.conf import settings
 # Importar permisos personalizados
 from .permissions import IsAdminUser, IsRecepcionUser
 from .mixins import MultiTenantViewSetMixin
+from .services.notifications import NotificationManager
 from decimal import Decimal
 from django.db.models import Sum
+from rest_framework.decorators import action
 
 
 # ============================================================
@@ -438,8 +439,52 @@ class PagoMembresiaViewSet(viewsets.ModelViewSet):
 
 
 # ============================================================
-# NOTIFICATIONS
+# NOTIFICACIONES (Nivel 1) — API persistente multi-tenant
 # ============================================================
+
+class NotificationViewSet(MultiTenantViewSetMixin, viewsets.ReadOnlyModelViewSet):
+    """API de notificaciones para admin y recepcionistas.
+
+    El listado dispara la generación perezosa e idempotente de notificaciones
+    (vencimientos de membresías y eventos del día) y devuelve SOLO las no
+    leídas, ordenadas de más reciente a más antigua. Las leídas desaparecen.
+    """
+    queryset = Notification.objects.all()
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated, IsRecepcionUser]
+
+    def get_queryset(self):
+        """Solo notificaciones no leídas del gimnasio del request."""
+        queryset = super().get_queryset().filter(is_read=False)
+        return queryset.order_by('-created_at')
+
+    def list(self, request, *args, **kwargs):
+        # Generación perezosa e idempotente antes de responder
+        NotificationManager.generate_for_gimnasio(request.gimnasio)
+        return super().list(request, *args, **kwargs)
+
+    @action(detail=True, methods=['post'], url_path='marcar-leida')
+    def marcar_leida(self, request, pk=None):
+        """Marca una notificación como leída (is_read=True, read_at=ahora)."""
+        notification = self.get_object()
+        notification.is_read = True
+        notification.read_at = timezone.now()
+        notification.save(update_fields=['is_read', 'read_at'])
+        return Response({'status': 'ok'})
+
+    @action(detail=False, methods=['post'], url_path='marcar-todas-leidas')
+    def marcar_todas_leidas(self, request):
+        """Marca todas las notificaciones no leídas del gimnasio como leídas."""
+        now = timezone.now()
+        # get_queryset ya limita al gimnasio del request y a las no leídas
+        marked = self.get_queryset().update(is_read=True, read_at=now)
+        return Response({'status': 'ok', 'marked': marked})
+
+    @action(detail=False, methods=['get'], url_path='no-leidas')
+    def no_leidas(self, request):
+        """Conteo de notificaciones no leídas para el badge del frontend."""
+        count = self.get_queryset().count()
+        return Response({'count': count})
 
 # ============================================================
 # ACTIVIDADES RECIENTES
@@ -708,128 +753,6 @@ class ExportReportView(APIView):
 
         wb.save(response)
         return response
-
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def membership_notifications(request):
-    from django.conf import settings
-    
-    gimnasio = request.gimnasio
-    numero_gimnasio = getattr(settings, 'WHATSAPP_NUMBER', '573001234567')  # Default si no está configurado
-    
-    today = datetime.now().date()
-    three_day_later = today + timedelta(days=3)
-    
-    # Base queryset filtrada por gimnasio
-    if gimnasio:
-        # Membresías próximas a vencer: solo las que NO han sido marcadas como leídas
-        expiring_memberships = MembresiaAsignada.objects.filter(
-            miembro__gimnasio=gimnasio,
-            dateFinal__gt=today,  # Solo mayores a hoy (no 0 ni negativos)
-            dateFinal__lte=three_day_later,
-            notified_at__isnull=True  # No marcadas como leídas
-        ).select_related('miembro', 'membresia', 'miembro__gimnasio')
-        
-        # Membresías vencidas: solo las NO leídas
-        expired_memberships = MembresiaAsignada.objects.filter(
-            miembro__gimnasio=gimnasio,
-            dateFinal__lte=today,
-            notified_at__isnull=True  # No marcadas como leídas
-        ).select_related('miembro', 'membresia', 'miembro__gimnasio')
-    else:
-        expiring_memberships = MembresiaAsignada.objects.none()
-        expired_memberships = MembresiaAsignada.objects.none()
-
-    notifications = []
-
-    for membership in expiring_memberships:
-        days_left = (membership.dateFinal - today).days
-        member_name = f"{membership.miembro.name} {membership.miembro.lastname}"
-        membership_name = membership.membresia.name
-        exp_date = membership.dateFinal.strftime('%d/%m/%Y')
-        
-        # Generar mensaje para WhatsApp
-        wa_message = f"Hola%20{member_name},%20tu%20membresía%20({membership_name})%20expira%20el%20{exp_date}%20en%20{days_left}%20días.%20¿Deseas%20renovar%20ahora%20y%20seguir%20entrenando%20con%20nosotros%3F"
-        
-        # Limpiar teléfono (solo números)
-        phone = membership.miembro.phone or ''
-        phone_clean = ''.join(filter(str.isdigit, phone))
-        
-        # Agregar código de país si no lo tiene
-        if phone_clean and not phone_clean.startswith('57'):
-            phone_clean = '57' + phone_clean
-        
-        wa_link = f"https://wa.me/{phone_clean}?text={wa_message}" if phone_clean else None
-        
-        notifications.append({
-            'type': 'warning',
-            'title': 'Membresía próxima a expirar',
-            'message': f'La membresía de {member_name} - {membership_name} expirará en {days_left} días.',
-            'date': exp_date,
-            'link': f'/dashboard/asignar-membresia/{membership.id}/',
-            'whatsapp_link': wa_link,
-            'membership_id': membership.id
-        })
-    
-    for membership in expired_memberships:
-        member_name = f"{membership.miembro.name} {membership.miembro.lastname}"
-        membership_name = membership.membresia.name
-        exp_date = membership.dateFinal.strftime('%d/%m/%Y')
-        
-        # Generar mensaje para WhatsApp
-        wa_message = f"Hola%20{member_name},%20tu%20membresía%20({membership_name})%20venció%20el%20{exp_date}.%20¡Te%20esperamos%20de%20vuelta%20para%20que%20renueves%20y%20continúes%20entrenando%21"
-        
-        # Limpiar teléfono (solo números)
-        phone = membership.miembro.phone or ''
-        phone_clean = ''.join(filter(str.isdigit, phone))
-        
-        # Agregar código de país si no lo tiene
-        if phone_clean and not phone_clean.startswith('57'):
-            phone_clean = '57' + phone_clean
-        
-        wa_link = f"https://wa.me/{phone_clean}?text={wa_message}" if phone_clean else None
-        
-        notifications.append({
-            'type': 'danger',
-            'title': 'Membresía vencida',
-            'message': f'La membresía de {member_name} - {membership_name} ya venció.',
-            'date': exp_date,
-            'link': f'/dashboard/asignar-membresia/{membership.id}/',
-            'whatsapp_link': wa_link,
-            'membership_id': membership.id
-        })
-    
-    return Response(notifications)
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def mark_notifications_read(request):
-    """Marca todas las notificaciones como leídas para el gimnasio del usuario."""
-    gimnasio = request.gimnasio
-    
-    if not gimnasio:
-        return Response({'status': 'no gimnasio'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    now = timezone.now()
-    
-    # Marcar membresías próximas a vencer (próximos 3 días)
-    MembresiaAsignada.objects.filter(
-        miembro__gimnasio=gimnasio,
-        dateFinal__gt=datetime.now().date(),
-        dateFinal__lte=datetime.now().date() + timedelta(days=3),
-        notified_at__isnull=True
-    ).update(notified_at=now)
-    
-    # Marcar membresías vencidas
-    MembresiaAsignada.objects.filter(
-        miembro__gimnasio=gimnasio,
-        dateFinal__lte=datetime.now().date(),
-        notified_at__isnull=True
-    ).update(notified_at=now)
-    
-    return Response({'status': 'ok', 'marked_at': now.isoformat()})
 
 
 # ============================================================

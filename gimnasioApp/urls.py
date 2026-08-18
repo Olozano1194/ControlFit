@@ -5,7 +5,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
     TokenBlacklistView,
 )
-from .views import UserViewSet, userProfileView, UsuarioGymViewSet, UsuarioGymDayViewSet, Home, MembresiaViewSet, MembresiaAsignadaViewSet, PagoMembresiaViewSet, membership_notifications, mark_notifications_read, ActivitiesView, ExportReportView, RegisterViewSet, DashboardStatsView, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView
+from .views import UserViewSet, userProfileView, UsuarioGymViewSet, UsuarioGymDayViewSet, Home, MembresiaViewSet, MembresiaAsignadaViewSet, PagoMembresiaViewSet, ActivitiesView, ExportReportView, RegisterViewSet, DashboardStatsView, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView, NotificationViewSet
 
 #api versioning
 router = routers.DefaultRouter()
@@ -16,6 +16,7 @@ router.register(r'MemberShips', MembresiaViewSet, basename='MemberShips')
 router.register(r'MemberShipsAsignada', MembresiaAsignadaViewSet, basename='MemberShipsAsignada')
 router.register(r'TiposEvento', TipoEventoViewSet, basename='TiposEvento')
 router.register(r'CalendarioEventos', EventoCalendarioViewSet, basename='CalendarioEventos')
+router.register(r'Notificaciones', NotificationViewSet, basename='Notificaciones')
 
 urlpatterns = [
     path('gym/api/v1/', include(router.urls)),      
@@ -28,8 +29,6 @@ urlpatterns = [
     path('gym/api/v1/MemberShipsAsignada/<int:pk>/pagos/',
          PagoMembresiaViewSet.as_view({'get': 'list', 'post': 'create'}),
          name='pagos-list'),
-    path('gym/api/v1/membership-notifications/', membership_notifications, name='membership-notifications'),
-    path('gym/api/v1/membership-notifications/read/', mark_notifications_read, name='mark-notifications-read'),
     path('gym/api/v1/activities/', ActivitiesView.as_view(), name='activities'),
     path('gym/api/v1/export-report/', ExportReportView.as_view(), name='export-report'),
     

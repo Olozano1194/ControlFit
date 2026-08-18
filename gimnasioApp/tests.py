@@ -13,11 +13,12 @@ from unittest.mock import patch, MagicMock, call
 from decimal import Decimal
 from datetime import datetime, timedelta, date, timezone as dt_timezone
 from django.utils import timezone
-from .models import Gimnasio, Usuario, UsuarioGym, Membresia, MembresiaAsignada, PagoMembresia, TipoEvento, EventoCalendario
+from .models import Gimnasio, Usuario, UsuarioGym, Membresia, MembresiaAsignada, PagoMembresia, TipoEvento, EventoCalendario, Notification
 from .middleware import GimnasioMiddleware
 from .mixins import MultiTenantViewSetMixin
 from .serializers import UsuarioSerializer, UsuarioGymSerializer, MembresiasSerializer, MembresiaAsignadaSerializer, PagoMembresiaSerializer, EventoCalendarioSerializer
-from .views import UserViewSet, UsuarioGymViewSet, MembresiaViewSet, Home, PagoMembresiaViewSet, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView
+from .views import UserViewSet, UsuarioGymViewSet, MembresiaViewSet, Home, PagoMembresiaViewSet, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView, NotificationViewSet
+from .services.notifications import NotificationManager
 from .storage import SupabaseMediaStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -1558,3 +1559,359 @@ class PublicCalendarioEndpointTest(TestCase):
         match = resolve(f'/api/calendario/publico/{self.gimnasio1.id}/')
         self.assertEqual(match.func.cls.__name__, 'PublicCalendarioView')
         self.assertFalse(match.route.startswith('gym/api/v1'))
+
+
+# ============================================================
+# NOTIFICACIONES NIVEL 1 — TESTS
+# ============================================================
+
+class NotificationModelTest(TestCase):
+    """Tests del modelo Notification: constraint de idempotencia y defaults."""
+
+    def setUp(self):
+        self.gimnasio = Gimnasio.objects.create(name="Gym Notif")
+
+    def _crear(self, **kwargs):
+        """Helper: crea una Notification con defaults mínimos."""
+        defaults = {
+            'gimnasio': self.gimnasio,
+            'tipo': 'por_vencer',
+            'titulo': 'Título',
+            'mensaje': 'Mensaje',
+            'fecha': date.today(),
+            'relacion_tipo': 'membership',
+            'relacion_id': 100,
+            'link': '/dashboard/asignar-membresia-list',
+        }
+        defaults.update(kwargs)
+        return Notification.objects.create(**defaults)
+
+    def test_duplicado_misma_clave_raise_integrity_error(self):
+        """Escenario spec: mismo gimnasio, relacion_tipo, relacion_id y tipo → IntegrityError."""
+        self._crear()
+        with self.assertRaises(IntegrityError):
+            self._crear()
+
+    def test_tipo_distinto_permite_mismo_origen(self):
+        """Escenario spec: mismo origen pero tipo distinto → la creación es exitosa."""
+        self._crear()
+        self._crear(tipo='vencida')  # No debe lanzar
+        self.assertEqual(Notification.objects.count(), 2)
+
+    def test_defaults_del_modelo(self):
+        """Campos opcionales: is_read=False, read_at=None, whatsapp_link=None."""
+        n = self._crear()
+        self.assertFalse(n.is_read)
+        self.assertIsNone(n.read_at)
+        self.assertIsNone(n.whatsapp_link)
+        self.assertIsNotNone(n.created_at)
+        self.assertEqual(n._meta.db_table, 'notification')
+
+
+class NotificationManagerTest(TestCase):
+    """Tests de NotificationManager.generate_for_gimnasio(): generación idempotente."""
+
+    def setUp(self):
+        self.gimnasio = Gimnasio.objects.create(name="Gym Manager")
+        self.miembro = UsuarioGym.objects.create(
+            name="Ana", lastname="Garcia", phone="3001234567", gimnasio=self.gimnasio
+        )
+        self.membresia = Membresia.objects.create(
+            name="Plan 30", price=Decimal('50000'), duration=30, gimnasio=self.gimnasio
+        )
+
+    def _membresia_con_fin(self, dias):
+        """Crea una MembresiaAsignada cuyo dateFinal cae dentro de N días desde hoy."""
+        return MembresiaAsignada.objects.create(
+            miembro=self.miembro,
+            membresia=self.membresia,
+            dateInitial=date.today() + timedelta(days=dias - 30)
+        )
+
+    def test_genera_por_vencer_para_membresia_proxima(self):
+        """Escenario spec: membresía con dateFinal en (hoy, hoy+3] → tipo='por_vencer'."""
+        ma = self._membresia_con_fin(2)
+        NotificationManager.generate_for_gimnasio(self.gimnasio)
+        notif = Notification.objects.get(relacion_tipo='membership', relacion_id=ma.id)
+        self.assertEqual(notif.tipo, 'por_vencer')
+        self.assertEqual(notif.gimnasio, self.gimnasio)
+        self.assertEqual(notif.link, '/dashboard/asignar-membresia-list')
+        self.assertEqual(notif.fecha, ma.dateFinal)
+
+    def test_genera_vencida_para_membresia_vencida(self):
+        """Escenario spec: membresía con dateFinal hoy o antes → tipo='vencida'."""
+        ma = self._membresia_con_fin(0)
+        NotificationManager.generate_for_gimnasio(self.gimnasio)
+        notif = Notification.objects.get(relacion_tipo='membership', relacion_id=ma.id)
+        self.assertEqual(notif.tipo, 'vencida')
+
+    def test_genera_evento_para_evento_de_hoy(self):
+        """Escenario spec: EventoCalendario con fecha_inicio hoy → tipo='evento' con deep link."""
+        evento = EventoCalendario.objects.create(
+            titulo="Clase hoy",
+            fecha_inicio=_utc(date.today().year, date.today().month, date.today().day, 10, 0),
+            fecha_fin=_utc(date.today().year, date.today().month, date.today().day, 11, 0),
+            gimnasio=self.gimnasio,
+        )
+        NotificationManager.generate_for_gimnasio(self.gimnasio)
+        notif = Notification.objects.get(relacion_tipo='evento', relacion_id=evento.id)
+        self.assertEqual(notif.tipo, 'evento')
+        self.assertIn(f'?evento={evento.id}', notif.link)
+
+    def test_generacion_idempotente_no_duplica(self):
+        """Escenario spec: segunda llamada a generate → get_or_create devuelve lo existente."""
+        self._membresia_con_fin(2)
+        NotificationManager.generate_for_gimnasio(self.gimnasio)
+        total_primera = Notification.objects.count()
+        NotificationManager.generate_for_gimnasio(self.gimnasio)
+        self.assertEqual(Notification.objects.count(), total_primera)
+
+    def test_miembro_sin_telefono_no_genera_whatsapp_link(self):
+        """Edge case: miembro sin phone → whatsapp_link=None."""
+        sin_phone = UsuarioGym.objects.create(
+            name="Solo", lastname="Numero", phone="", gimnasio=self.gimnasio
+        )
+        MembresiaAsignada.objects.create(
+            miembro=sin_phone, membresia=self.membresia,
+            dateInitial=date.today() - timedelta(days=31)
+        )
+        NotificationManager.generate_for_gimnasio(self.gimnasio)
+        notif = Notification.objects.get(relacion_tipo='membership', relacion_id__isnull=False, tipo='vencida')
+        self.assertIsNone(notif.whatsapp_link)
+
+    def test_miembro_con_telefono_genera_whatsapp_link_con_prefijo_57(self):
+        """Escenario spec: whatsapp_link incluye el teléfono con prefijo 57."""
+        ma = self._membresia_con_fin(1)
+        NotificationManager.generate_for_gimnasio(self.gimnasio)
+        notif = Notification.objects.get(relacion_tipo='membership', relacion_id=ma.id)
+        self.assertIsNotNone(notif.whatsapp_link)
+        self.assertTrue(notif.whatsapp_link.startswith('https://wa.me/57'))
+
+    def test_frontera_media_noche_datefinal_hoy_es_vencida(self):
+        """Edge case límite: dateFinal == hoy → vencida (no por_vencer)."""
+        ma = self._membresia_con_fin(0)
+        NotificationManager.generate_for_gimnasio(self.gimnasio)
+        notif = Notification.objects.get(relacion_tipo='membership', relacion_id=ma.id)
+        self.assertEqual(notif.tipo, 'vencida')
+
+    def test_frontera_hoy_mas_3_es_por_vencer_y_mas_4_no_genera(self):
+        """Edge case límite: dateFinal == hoy+3 → por_vencer; hoy+4 → sin notificación."""
+        ma_limite = self._membresia_con_fin(3)
+        self._membresia_con_fin(4)
+        NotificationManager.generate_for_gimnasio(self.gimnasio)
+        self.assertEqual(
+            Notification.objects.get(relacion_tipo='membership', relacion_id=ma_limite.id).tipo,
+            'por_vencer'
+        )
+        # Solo existe la notificación del límite (hoy+4 queda fuera de la ventana)
+        self.assertEqual(
+            Notification.objects.filter(relacion_tipo='membership').count(), 1
+        )
+
+    def test_evento_de_manana_no_genera(self):
+        """Edge case: evento con fecha_inicio mañana → sin notificación de evento."""
+        manana = date.today() + timedelta(days=1)
+        EventoCalendario.objects.create(
+            titulo="Clase mañana",
+            fecha_inicio=_utc(manana.year, manana.month, manana.day, 10, 0),
+            fecha_fin=_utc(manana.year, manana.month, manana.day, 11, 0),
+            gimnasio=self.gimnasio,
+        )
+        NotificationManager.generate_for_gimnasio(self.gimnasio)
+        self.assertEqual(Notification.objects.filter(tipo='evento').count(), 0)
+
+    def test_no_genera_para_gimnasio_sin_datos(self):
+        """Edge case: gimnasio vacío → generate no crea ninguna notificación."""
+        gimnasio_vacio = Gimnasio.objects.create(name="Gym Vacío")
+        NotificationManager.generate_for_gimnasio(gimnasio_vacio)
+        self.assertEqual(Notification.objects.filter(gimnasio=gimnasio_vacio).count(), 0)
+
+
+class NotificationViewSetTest(TestCase):
+    """Tests del API de notificaciones: permisos, aislamiento, lectura y endpoints."""
+
+    def setUp(self):
+        self.gimnasio1 = Gimnasio.objects.create(name="Gym 1")
+        self.gimnasio2 = Gimnasio.objects.create(name="Gym 2")
+        self.admin1 = Usuario.objects.create_user(
+            email="admin1@example.com", name="A", lastname="One",
+            password="password123", roles="admin", gimnasio=self.gimnasio1
+        )
+        self.rec1 = Usuario.objects.create_user(
+            email="rec1@example.com", name="R", lastname="One",
+            password="password123", roles="recepcion", gimnasio=self.gimnasio1
+        )
+        self.no_staff = Usuario.objects.create_user(
+            email="nope@example.com", name="N", lastname="Ope",
+            password="password123", roles="cliente", gimnasio=self.gimnasio1
+        )
+        self.user2 = Usuario.objects.create_user(
+            email="user2@example.com", name="U", lastname="Two",
+            password="password123", roles="admin", gimnasio=self.gimnasio2
+        )
+        self.miembro = UsuarioGym.objects.create(
+            name="Ana", lastname="Garcia", gimnasio=self.gimnasio1
+        )
+        self.membresia = Membresia.objects.create(
+            name="Plan 30", price=Decimal('50000'), duration=30, gimnasio=self.gimnasio1
+        )
+        self.factory = APIRequestFactory()
+
+    def _crear_notificacion(self, gym, tipo='evento', leida=False, relacion_id=None):
+        # Cada notificación usa una clave de unicidad distinta. Base alta para
+        # no colisionar con ids reales de EventoCalendario/MembresiaAsignada.
+        if relacion_id is None:
+            self._seq = getattr(self, '_seq', 0) + 1
+            relacion_id = 100000 + self._seq
+        n = Notification.objects.create(
+            gimnasio=gym, tipo=tipo, titulo=f"Notif {tipo}",
+            mensaje="Mensaje", fecha=date.today(),
+            relacion_tipo='evento', relacion_id=relacion_id,
+            link='/dashboard/calendar?evento=999'
+        )
+        if leida:
+            n.is_read = True
+            n.read_at = timezone.now()
+            n.save(update_fields=['is_read', 'read_at'])
+        return n
+
+    def _list(self, user, gym):
+        view = NotificationViewSet.as_view({'get': 'list'})
+        request = self.factory.get('/')
+        request.user = user
+        request.gimnasio = gym
+        force_authenticate(request, user=user)
+        return view(request)
+
+    def test_unauthenticated_list_returns_401(self):
+        """Escenario spec: usuario no autenticado → 401."""
+        view = NotificationViewSet.as_view({'get': 'list'})
+        response = view(self.factory.get('/'))
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_usuario_sin_rol_staff_returns_403(self):
+        """Escenario spec: usuario que no es admin/recepcion → 403."""
+        response = self._list(self.no_staff, self.gimnasio1)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_y_recepcion_pueden_listar(self):
+        """Escenario spec: admin y recepcion tienen acceso a list/read/count."""
+        for user in (self.admin1, self.rec1):
+            response = self._list(user, self.gimnasio1)
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_list_dispara_generacion_y_retorna_solo_no_leidas(self):
+        """Escenario spec: primer list → genera notificaciones y devuelve solo las no leídas."""
+        # Dos notificaciones leídas pre-existentes (no deben aparecer)
+        self._crear_notificacion(self.gimnasio1, leida=True)
+        self._crear_notificacion(self.gimnasio1, leida=True)
+        # Datos que disparan generación: membresía por vencer en 2 días + evento hoy
+        MembresiaAsignada.objects.create(
+            miembro=self.miembro, membresia=self.membresia,
+            dateInitial=date.today() - timedelta(days=28)
+        )
+        EventoCalendario.objects.create(
+            titulo="Clase hoy",
+            fecha_inicio=_utc(date.today().year, date.today().month, date.today().day, 10, 0),
+            fecha_fin=_utc(date.today().year, date.today().month, date.today().day, 11, 0),
+            gimnasio=self.gimnasio1,
+        )
+
+        response = self._list(self.admin1, self.gimnasio1)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        tipos = {item['tipo'] for item in response.data}
+        self.assertEqual(tipos, {'por_vencer', 'evento'})
+        # Las 2 leídas no aparecen y la generación creó 2 nuevas
+        self.assertEqual(len(response.data), 2)
+        self.assertTrue(all(item['is_read'] is False for item in response.data))
+
+    def test_segundo_list_no_duplica(self):
+        """Escenario spec: segunda llamada al list → get_or_create, sin duplicados."""
+        MembresiaAsignada.objects.create(
+            miembro=self.miembro, membresia=self.membresia,
+            dateInitial=date.today() - timedelta(days=28)
+        )
+        self._list(self.admin1, self.gimnasio1)
+        total = Notification.objects.filter(gimnasio=self.gimnasio1).count()
+        self._list(self.admin1, self.gimnasio1)
+        self.assertEqual(
+            Notification.objects.filter(gimnasio=self.gimnasio1).count(), total
+        )
+
+    def test_list_aislado_por_gimnasio(self):
+        """Escenario spec: usuario del gym B no ve notificaciones del gym A."""
+        self._crear_notificacion(self.gimnasio1)
+        response = self._list(self.user2, self.gimnasio2)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, [])
+
+    def test_marcar_leida_setea_read_at_y_oculta(self):
+        """Escenario spec: POST {id}/marcar-leida/ → is_read+read_at y desaparece del list."""
+        n = self._crear_notificacion(self.gimnasio1)
+        view = NotificationViewSet.as_view({'post': 'marcar_leida'})
+        request = self.factory.post('/')
+        request.user = self.admin1
+        request.gimnasio = self.gimnasio1
+        force_authenticate(request, user=self.admin1)
+        response = view(request, pk=n.id)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        n.refresh_from_db()
+        self.assertTrue(n.is_read)
+        self.assertIsNotNone(n.read_at)
+        # Ya no aparece en el list
+        lista = self._list(self.admin1, self.gimnasio1)
+        self.assertNotIn(n.id, [item['id'] for item in lista.data])
+
+    def test_marcar_leida_cross_gym_returns_404(self):
+        """Aislamiento: usuario del gym B no puede marcar notificaciones del gym A."""
+        n = self._crear_notificacion(self.gimnasio1)
+        view = NotificationViewSet.as_view({'post': 'marcar_leida'})
+        request = self.factory.post('/')
+        request.user = self.user2
+        request.gimnasio = self.gimnasio2
+        force_authenticate(request, user=self.user2)
+        response = view(request, pk=n.id)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_marcar_todas_leidas_marca_todas(self):
+        """Escenario spec: POST marcar-todas-leidas/ → todas leídas y list vacío."""
+        for _ in range(3):
+            self._crear_notificacion(self.gimnasio1)
+        view = NotificationViewSet.as_view({'post': 'marcar_todas_leidas'})
+        request = self.factory.post('/')
+        request.user = self.admin1
+        request.gimnasio = self.gimnasio1
+        force_authenticate(request, user=self.admin1)
+        response = view(request)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['marked'], 3)
+        self.assertFalse(
+            Notification.objects.filter(gimnasio=self.gimnasio1, is_read=False).exists()
+        )
+        lista = self._list(self.admin1, self.gimnasio1)
+        self.assertEqual(lista.data, [])
+
+    def test_no_leidas_retorna_conteo(self):
+        """Escenario spec: GET no-leidas/ → {"count": N} con solo no leídas."""
+        self._crear_notificacion(self.gimnasio1)
+        self._crear_notificacion(self.gimnasio1)
+        self._crear_notificacion(self.gimnasio1, leida=True)
+        view = NotificationViewSet.as_view({'get': 'no_leidas'})
+        request = self.factory.get('/')
+        request.user = self.admin1
+        request.gimnasio = self.gimnasio1
+        force_authenticate(request, user=self.admin1)
+        response = view(request)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {'count': 2})
+
+    def test_endpoints_legacy_removed_returns_404(self):
+        """Escenario spec: los endpoints legacy eliminados responden 404."""
+        self.assertEqual(
+            self.client.get('/gym/api/v1/membership-notifications/').status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        self.assertEqual(
+            self.client.post('/gym/api/v1/membership-notifications/read/', {}).status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
