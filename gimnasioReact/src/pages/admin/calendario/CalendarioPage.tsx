@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Calendar, dateFnsLocalizer, Event, type SlotInfo } from 'react-big-calendar';
 import withDragAndDrop, {
     type EventInteractionArgs,
@@ -10,6 +11,7 @@ import { IoClose } from 'react-icons/io5';
 import {
     getEventos,
     getTiposEvento,
+    getEvento,
     patchEvento,
     deleteEvento,
 } from '../../../api/action/calendario.api';
@@ -41,6 +43,16 @@ interface CalendarEvent extends Event {
     end: Date;
     resource?: EventoCalendario;
 }
+
+// Convierte un EventoCalendario del API al formato interno del calendario.
+// Se reutiliza para el listado y para el deep link (?evento=<id>) de
+// notificaciones: el evento puede no estar en el rango inicial cargado.
+const toCalendarEvent = (ev: EventoCalendario): CalendarEvent => ({
+    title: ev.titulo,
+    start: new Date(ev.fecha_inicio),
+    end: new Date(ev.fecha_fin),
+    resource: ev,
+});
 
 // ─── Componente ──────────────────────────────────────────────────────────────
 
@@ -93,14 +105,24 @@ const CalendarioPage = () => {
         fetchData();
     }, [fetchData]);
 
+    // ── Deep link desde notificaciones (?evento=<id>) ────────────────────────
+    const [searchParams] = useSearchParams();
+
+    useEffect(() => {
+        const eventoParam = searchParams.get('evento');
+        if (!eventoParam) return;
+        const eventoId = Number(eventoParam);
+        if (Number.isNaN(eventoId)) return;
+        // Abre el modal de detalle con el evento traído por id, aunque no esté
+        // dentro del rango inicial del calendario.
+        getEvento(eventoId)
+            .then((ev) => setSelectedEvent(toCalendarEvent(ev)))
+            .catch(() => toast.error('No se encontró el evento solicitado'));
+    }, [searchParams]);
+
     // ── Mapeo a eventos del calendario ───────────────────────────────────────
 
-    const calendarEvents: CalendarEvent[] = eventos.map((ev) => ({
-        title: ev.titulo,
-        start: new Date(ev.fecha_inicio),
-        end: new Date(ev.fecha_fin),
-        resource: ev,
-    }));
+    const calendarEvents: CalendarEvent[] = eventos.map(toCalendarEvent);
 
     // ── Estilos por tipo ─────────────────────────────────────────────────────
 

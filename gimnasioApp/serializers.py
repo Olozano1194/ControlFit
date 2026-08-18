@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.db import transaction
 from django.core.exceptions import ValidationError as DjangoValidationError
-from .models import Gimnasio, Usuario, UsuarioGym, UsuarioGymDay, Membresia, MembresiaAsignada, PagoMembresia, TipoEvento, EventoCalendario
+from .models import Gimnasio, Usuario, UsuarioGym, UsuarioGymDay, Membresia, MembresiaAsignada, PagoMembresia, TipoEvento, EventoCalendario, Notification
 from datetime import timedelta, date
 from decimal import Decimal
 
@@ -397,3 +397,15 @@ class EventoCalendarioSerializer(serializers.ModelSerializer):
         if 'descripcion' in data and data.get('descripcion') is None:
             data['descripcion'] = ''
         return data
+
+
+# ============================================================
+# NOTIFICACIONES
+# ============================================================
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ['id', 'tipo', 'titulo', 'mensaje', 'fecha', 'relacion_tipo',
+                  'relacion_id', 'link', 'whatsapp_link', 'is_read', 'read_at', 'created_at']
+        read_only_fields = ('id', 'gimnasio', 'is_read', 'read_at', 'created_at')
