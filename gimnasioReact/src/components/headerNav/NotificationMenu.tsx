@@ -9,7 +9,7 @@ import { Link } from "react-router-dom";
 //react-menu
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 //Notificaciones
-import { getMemberNotifications, markNotificationsAsRead } from "../../api/action/notifications.api";
+import { getNotifications, getUnreadCount, markOneRead, markAllAsRead } from "../../api/action/notifications.api";
 //Models
 import { Notification } from "../../model/notifications.model";
 
@@ -21,9 +21,17 @@ const NotificationMenu = () => {
 
     useEffect(() => {
         const fetchNotifications = async () => {
-            const data = await getMemberNotifications();
-            setNotifications(data);
-            setCount(data.length);
+            try {
+                // El badge usa el conteo real del backend (no la longitud de la lista)
+                const [data, unread] = await Promise.all([
+                    getNotifications(),
+                    getUnreadCount(),
+                ]);
+                setNotifications(data);
+                setCount(unread.count);
+            } catch (error) {
+                console.error('Error al cargar notificaciones:', error);
+            }
         };
         fetchNotifications();
 
@@ -32,10 +40,21 @@ const NotificationMenu = () => {
         return () => clearInterval(intervalId);
     }, []);
 
-    //Marcar todas como leídas (llama al backend para persistir)
-    const markAllAsRead = async () => {
+    //Marcar una notificación como leída y quitarla de la lista (el badge baja)
+    const handleMarkOneRead = async (id: number) => {
         try {
-            await markNotificationsAsRead();
+            await markOneRead(id);
+            setNotifications((prev) => prev.filter((n) => n.id !== id));
+            setCount((prev) => Math.max(0, prev - 1));
+        } catch (error) {
+            console.error('Error al marcar como leída:', error);
+        }
+    };
+
+    //Marcar todas como leídas (llama al backend para persistir)
+    const handleMarkAllAsRead = async () => {
+        try {
+            await markAllAsRead();
             setNotifications([]);
             setCount(0);
         } catch (error) {
@@ -44,13 +63,13 @@ const NotificationMenu = () => {
     };
 
     //Obtener icono según el tipo de notificación
-    const getNotificationIcon = (type: Notification['type']) => {
-        switch (type) {
-            case 'warning':
+    const getNotificationIcon = (tipo: Notification['tipo']) => {
+        switch (tipo) {
+            case 'por_vencer':
                 return <RiInformationLine className="p-2 bg-yellow-100 text-yellow-500 box-content rounded-full" />;
-            case 'danger':
+            case 'vencida':
                 return <RiCloseLine className="p-2 bg-red-100 text-red-500 box-content rounded-full" />;
-            case 'success':
+            case 'evento':
                 return <RiCheckLine className="p-2 bg-green-100 text-green-500 box-content rounded-full" />;
             default:
                 return <RiInformationLine className="p-2 bg-blue-100 text-blue-500 box-content rounded-full" />;
@@ -72,7 +91,7 @@ const NotificationMenu = () => {
                     <h1 className="text-title font-medium">Notificaciones</h1>
                     {count > 0 && (
                         <button
-                            onClick={markAllAsRead}
+                            onClick={handleMarkAllAsRead}
                             className="text-sm text-primary hover:underline"
                         >
                             Marcar como leídas
@@ -83,28 +102,29 @@ const NotificationMenu = () => {
                 {notifications.length === 0 ? (
                     <div className="text-center py-4">
                         <RiInboxLine className="mx-auto text-3xl text-nav/30 mb-2" />
-                        <p className="text-nav">No hay notificaciones</p>
+                        <p className="text-nav">No hay notificaciones nuevas</p>
                     </div>
                 ) : (
                     notifications.map((notification, index) => (
-                        <React.Fragment key={index}>
+                        <React.Fragment key={notification.id}>
                             <MenuItem as='div' className='p-0 hover:bg-slate-100'>
                                 <div className="flex flex-col">
                                     <Link
                                         to={notification.link}
+                                        onClick={() => handleMarkOneRead(notification.id)}
                                         className="flex flex-1 items-start gap-x-3 py-2 px-4 hover:bg-slate-100 transition-colors rounded-lg text-dark"
                                     >
-                                        {getNotificationIcon(notification.type)}
+                                        {getNotificationIcon(notification.tipo)}
                                         <div className="text-sm flex-1">
                                             <div className="flex items-start justify-between gap-2">
-                                                <span className="font-medium">{notification.title}</span>
-                                                <span className="text-xs text-nav">{notification.date}</span>
+                                                <span className="font-medium">{notification.titulo}</span>
+                                                <span className="text-xs text-nav">{notification.fecha}</span>
                                             </div>
-                                            <p className="text-dark mt-1">{notification.message}</p>
+                                            <p className="text-dark mt-1">{notification.mensaje}</p>
                                         </div>
                                     </Link>
                                     
-                                    {/* Botón de WhatsApp */}
+                                    {/* Botón de WhatsApp (no dispara la lectura) */}
                                     {notification.whatsapp_link && (
                                         <a
                                             href={notification.whatsapp_link}
