@@ -53,24 +53,24 @@ Chain strategy: stacked-to-main
 
 ## Phase 4: Frontend Foundation (Model + API Client)
 
-- [ ] 4.1 Replace `gimnasioReact/src/model/notifications.model.ts` — new interface with id, tipo ('por_vencer'|'vencida'|'evento'), titulo, mensaje, fecha, relacion_tipo, relacion_id, link, whatsapp_link, is_read, read_at, created_at
-- [ ] 4.2 Replace `gimnasioReact/src/api/action/notifications.api.ts` — 4 functions: getNotifications(), getUnreadCount() → {count}, markOneRead(id), markAllAsRead()
+- [x] 4.1 Replace `gimnasioReact/src/model/notifications.model.ts` — new interface with id, tipo ('por_vencer'|'vencida'|'evento'), titulo, mensaje, fecha, relacion_tipo, relacion_id, link, whatsapp_link, is_read, read_at, created_at
+- [x] 4.2 Replace `gimnasioReact/src/api/action/notifications.api.ts` — 4 functions: getNotifications(), getUnreadCount() → {count}, markOneRead(id), markAllAsRead()
 
 ## Phase 5: Frontend Core Implementation (Components)
 
-- [ ] 5.1 Update `gimnasioReact/src/components/headerNav/NotificationMenu.tsx` — use getUnreadCount() for badge (not list length); per-item read via markOneRead(id) on click; stable key=n.id; new icon mapping (por_vencer→RiInformationLine yellow, vencida→RiCloseLine red, evento→RiCheckLine green); keep 5-min polling; empty state "No hay notificaciones nuevas"
-- [ ] 5.2 Update `gimnasioReact/src/pages/admin/notifications/NotificationsPage.tsx` — use getNotifications(); per-item read button; markAllAsRead(); stable key=n.id; link field → notification.link (fixes membership link to /dashboard/asignar-membresia-list); loading/error states
-- [ ] 5.3 Update `gimnasioReact/src/pages/admin/calendario/CalendarioPage.tsx` — read `?evento=<id>` from useSearchParams on mount; if present, call getEvento(id) and set selectedEvent to open detail modal; error toast on 404; import getEvento from calendario.api.ts
+- [x] 5.1 Update `gimnasioReact/src/components/headerNav/NotificationMenu.tsx` — use getUnreadCount() for badge (not list length); per-item read via markOneRead(id) on click; stable key=n.id; new icon mapping (por_vencer→RiInformationLine yellow, vencida→RiCloseLine red, evento→RiCheckLine green); keep 5-min polling; empty state "No hay notificaciones nuevas"
+- [x] 5.2 Update `gimnasioReact/src/pages/admin/notifications/NotificationsPage.tsx` — use getNotifications(); per-item read button; markAllAsRead(); stable key=n.id; link field → notification.link (fixes membership link to /dashboard/asignar-membresia-list); loading/error states
+- [x] 5.3 Update `gimnasioReact/src/pages/admin/calendario/CalendarioPage.tsx` — read `?evento=<id>` from useSearchParams on mount; if present, call getEvento(id) and set selectedEvent to open detail modal; error toast on 404; import getEvento from calendario.api.ts
 
 ## Phase 6: Frontend Verification
 
-- [ ] 6.1 Run `tsc -b` in gimnasioReact — TypeScript compilation passes with no errors
-- [ ] 6.2 Run `npm run build` in gimnasioReact — production build succeeds
-- [ ] 6.3 Manual QA: badge shows unread count, not list length
-- [ ] 6.4 Manual QA: click notification → disappears, badge decrements
-- [ ] 6.5 Manual QA: membership notification link navigates to /dashboard/asignar-membresia-list (no 404)
-- [ ] 6.6 Manual QA: calendar deep link ?evento=<id> → modal opens with correct event
-- [ ] 6.7 Manual QA: calendar deep link ?evento=999 → error toast, calendar loads normally
+- [x] 6.1 Run `tsc -b` in gimnasioReact — TypeScript compilation passes with no errors
+- [x] 6.2 Run `npm run build` in gimnasioReact — production build succeeds
+- [x] 6.3 Manual QA: badge shows unread count, not list length
+- [x] 6.4 Manual QA: click notification → disappears, badge decrements
+- [x] 6.5 Manual QA: membership notification link navigates to /dashboard/asignar-membresia-list (no 404)
+- [x] 6.6 Manual QA: calendar deep link ?evento=<id> → modal opens with correct event
+- [x] 6.7 Manual QA: calendar deep link ?evento=999 → error toast, calendar loads normally
 
 ## Requirement Traceability
 
