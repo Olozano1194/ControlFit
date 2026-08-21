@@ -1,4 +1,6 @@
 import {Routes, Route, Navigate } from 'react-router-dom';
+//Context
+import { useAuth } from './context/useAuth';
 //Layouts
 import LayoutAdmin from './layouts/LayoutAdmin';
 //Pages auth
@@ -29,10 +31,18 @@ import ProtectRoute from './routes/protectedRoute/ProtectRoute';
 
 import Error404 from './pages/Error404';
 
+// Redirige la raíz según sesión: con sesión válida a /dashboard, sin sesión a /login.
+// Espera el loading para no mandar al login a un usuario con sesión restaurable.
+const HomeRedirect = () => {
+    const { isAuthenticated, loading } = useAuth();
+    if (loading) return null;
+    return <Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />;
+};
+
 function App() {
   return (
     <Routes>        
-      <Route path="/" element={<Navigate to='/login' />} />
+      <Route path="/" element={<HomeRedirect />} />
       <Route path="login" element={<Login />} />
       <Route path="forget-password" element={<ForgetPassword />} />
       {/* Rutas protegidas */}

@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { AuthContext } from './AuthContext';
 import { login as loginApi } from '../api/users/authUser.api';
-import { getAccessToken, setAccessToken, clearAccessToken, getRefreshTokenFromCookie, clearRefreshCookie } from '../utils/authStorage';
-import { axiosPrivate } from '../api/axios/axios.private';
+import { getAccessToken, setAccessToken, clearAccessToken } from '../utils/authStorage';
+import { axiosPublic } from '../api/axios/axios.public';
+import { refreshAccessToken } from '../api/axios/refreshToken.api';
 import type { LoginUserDto } from '../model/dto/user.dto';
 import type { UserRole } from '../components/sideBar/components/SideBarMenus';
 import { AuthUser } from '../model/dto/user.dto';
@@ -21,23 +22,26 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     const initAuth = async () => {
       const token = getAccessToken();
-      const refreshToken = getRefreshTokenFromCookie();
-      
-      if (!token && !refreshToken) {
-        setLoading(false);
-        return;        
-      }
-      
-      if (!token && refreshToken) {
-        setIsAuthenticated(true);
-        await loadUser(); 
+
+      if (!token) {
+        // Sin access token: intentar restaurar la sesión desde la cookie HttpOnly
+        try {
+          const newToken = await refreshAccessToken();
+          setAccessToken(newToken);
+          setIsAuthenticated(true);
+          await loadUser();
+        } catch {
+          // Sin sesión válida: dejar loading en false (ProtectRoute redirige a /login)
+          setLoading(false);
+        }
         return;
       }
-      
+
       setIsAuthenticated(true);
-      await loadUser(); 
+      await loadUser();
     };
     initAuth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadUser = async () => {
@@ -79,18 +83,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const performLogout = useCallback(async () => {
-    const refreshToken = getRefreshTokenFromCookie();
-    
-    if (refreshToken) {
-      try {
-        await axiosPrivate.post('/token/blacklist/', { refresh: refreshToken });
-      } catch {
-        // Ignorar errores de blacklist, continuar con logout local
-      }
+    try {
+      // El server blacklistea el refresh (cookie HttpOnly) y limpia la cookie
+      await axiosPublic.post('/auth/logout/');
+    } catch {
+      // Logout idempotente: continuar aunque falle el blacklist en el server
     }
     
     clearAccessToken();
-    clearRefreshCookie();
     setUser(null);
     setIsAuthenticated(false);
   }, []);

@@ -12,12 +12,3 @@ export const setAccessToken = (token: string): void => {
 export const clearAccessToken = (): void => {
   sessionStorage.removeItem(ACCESS_TOKEN_KEY);
 };
-
-export const getRefreshTokenFromCookie = (): string | null => {
-  const match = document.cookie.match(/refresh_token=([^;]+)/);
-  return match ? match[1] : null;
-};
-
-export const clearRefreshCookie = (): void => {
-  document.cookie = 'refresh_token=; Max-Age=0; Path=/gym/api/v1/token/refresh/';
-};
