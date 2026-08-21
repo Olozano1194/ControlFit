@@ -6,6 +6,7 @@ import LayoutAdmin from './layouts/LayoutAdmin';
 //Pages auth
 import Login from './pages/auth/LoginPage';
 import Register from './pages/auth/RegisterPage';
+import SolicitarDemo from './pages/auth/SolicitarDemoPage';
 import ForgetPassword from './pages/auth/ForgetPassword';
 //Pages admin
 import Home from './pages/admin/HomePage';
@@ -44,6 +45,7 @@ function App() {
     <Routes>        
       <Route path="/" element={<HomeRedirect />} />
       <Route path="login" element={<Login />} />
+      <Route path="solicitar-demo" element={<SolicitarDemo />} />
       <Route path="forget-password" element={<ForgetPassword />} />
       {/* Rutas protegidas */}
       <Route element={<ProtectRoute />} >

@@ -51,3 +51,13 @@ class MembresiaAsignadaAdmin(admin.ModelAdmin):
     def activa(self, obj):
         return obj.activa
     activa.boolean = True
+
+from .models import DemoRequest
+
+@admin.register(DemoRequest)
+class DemoRequestAdmin(admin.ModelAdmin):
+    list_display = ('nombre_gimnasio', 'nombre', 'email', 'telefono', 'estado', 'fecha_solicitud')
+    list_filter = ('estado', 'fecha_solicitud')
+    search_fields = ('nombre_gimnasio', 'nombre', 'email', 'telefono')
+    ordering = ('-fecha_solicitud',)
+    list_editable = ('estado',)

@@ -13,6 +13,9 @@ router.register(r'TiposEvento', TipoEventoViewSet, basename='TiposEvento')
 router.register(r'CalendarioEventos', EventoCalendarioViewSet, basename='CalendarioEventos')
 router.register(r'Notificaciones', NotificationViewSet, basename='Notificaciones')
 
+from .views import DemoRequestViewSet
+router.register(r'solicitudes-demo', DemoRequestViewSet, basename='solicitudes-demo')
+
 urlpatterns = [
     path('gym/api/v1/', include(router.urls)),      
     

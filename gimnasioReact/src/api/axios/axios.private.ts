@@ -1,5 +1,5 @@
 import axios, { AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
-import { getAccessToken, setAccessToken, clearAccessToken, clearRefreshCookie } from '../../utils/authStorage';
+import { getAccessToken, setAccessToken, clearAccessToken } from '../../utils/authStorage';
 import { refreshAccessToken } from './refreshToken.api';
 
 const baseURL = import.meta.env.MODE === 'development' 
@@ -128,9 +128,8 @@ axiosPrivate.interceptors.response.use(
       // Refresh falló, limpiar todo
       processQueue(refreshError as Error, null);
       
-      // Limpiar tokens y cookies
+      // Limpiar tokens
       clearAccessToken();
-      clearRefreshCookie();
       
       // Redirigir a login
       window.location.href = '/login';

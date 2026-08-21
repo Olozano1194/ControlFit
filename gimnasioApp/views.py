@@ -846,3 +846,23 @@ class PublicCalendarioView(APIView):
         ).select_related('tipo').order_by('fecha_inicio')
         serializer = EventoCalendarioSerializer(eventos, many=True)
         return Response(serializer.data)
+
+# ============================================================
+# SOLICITUD DE DEMO
+# ============================================================
+from .models import DemoRequest
+from .serializers import DemoRequestSerializer
+
+class DemoRequestViewSet(viewsets.ModelViewSet):
+    """
+    Endpoint para recibir solicitudes de demo desde la landing/login.
+    Solo permite creación (POST) públicamente.
+    """
+    queryset = DemoRequest.objects.all()
+    serializer_class = DemoRequestSerializer
+    permission_classes = [AllowAny]
+    http_method_names = ['post', 'options']
+
+    def perform_create(self, serializer):
+        # Acá a futuro podés agregar lógica para mandarte un email automático
+        serializer.save()

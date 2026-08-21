@@ -132,7 +132,13 @@ const Login = () => {
         <section className="border-t border-outline-variant mt-12 pt-8">
           <div className="flex flex-col gap-4 items-center">
             <p className="text-sm text-secondary">¿Nuevo en ControlFit Colombia?</p>
-            <button className="bg-surface-container-high cursor-pointer font-semibold px-6 py-2 rounded-full text-on-surface text-sm transition-colors hover:bg-surface-container-high/80">Solicitar una Demo</button>
+            <button 
+              type="button" 
+              onClick={() => navigate('/solicitar-demo')}
+              className="bg-surface-container-high cursor-pointer font-semibold px-6 py-2 rounded-full text-on-surface text-sm transition-colors hover:bg-surface-container-high/80"
+            >
+              Solicitar una Demo
+            </button>
           </div>
         </section>
       </form>
