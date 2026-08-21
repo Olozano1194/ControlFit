@@ -4,6 +4,10 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+from .auth_cookie import set_refresh_cookie, clear_refresh_cookie
 from .serializers import UsuarioSerializer, UsuarioGymSerializer, UsuarioGymDaySerializer, MembresiasSerializer, MembresiaAsignadaSerializer, PagoMembresiaSerializer, TipoEventoSerializer, EventoCalendarioSerializer, NotificationSerializer
 from .models import Usuario, UsuarioGym, UsuarioGymDay, Membresia, MembresiaAsignada, PagoMembresia, Gimnasio, TipoEvento, EventoCalendario, Notification
 from django.utils import timezone
@@ -18,7 +22,6 @@ from rest_framework.filters import SearchFilter
 from datetime import datetime, date, timedelta
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from django.conf import settings
 # Importar permisos personalizados
 from .permissions import IsAdminUser, IsRecepcionUser
 from .mixins import MultiTenantViewSetMixin
@@ -83,8 +86,6 @@ class RegisterViewSet(APIView):
     permission_classes = [AllowAny]
     
     def post(self, request, *args, **kwargs):
-        from rest_framework_simplejwt.tokens import RefreshToken
-        
         email = request.data.get('email')
         password = request.data.get('password')
         name = request.data.get('name')
@@ -124,17 +125,69 @@ class RegisterViewSet(APIView):
             'access': str(refresh.access_token),
         }, status=status.HTTP_201_CREATED)
         
-        # Establecer refresh token como cookie HttpOnly
-        response.set_cookie(
-            key='refresh_token',
-            value=str(refresh),
-            max_age=604800,  # 7 days
-            httponly=True,
-            secure=not settings.DEBUG,
-            samesite='Lax',
-            path='/gym/api/v1/token/refresh/',
-        )
+        # Establecer refresh token como cookie HttpOnly (helper compartido)
+        set_refresh_cookie(response, refresh)
         
+        return response
+
+
+# ============================================================
+# AUTH JWT — LOGIN / REFRESH / LOGOUT (cookie-based)
+# ============================================================
+
+class CookieTokenObtainPairView(TokenObtainPairView):
+    """Login: valida credenciales, setea el refresh como cookie HttpOnly y devuelve solo access."""
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == status.HTTP_200_OK:
+            refresh = response.data.get('refresh')
+            if refresh:
+                set_refresh_cookie(response, refresh)
+                del response.data['refresh']  # Nunca exponer el refresh en el body
+        return response
+
+
+class CookieTokenRefreshView(TokenRefreshView):
+    """Refresh: lee el refresh de la COOKIE (no del body), rota y re-setea la cookie."""
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        refresh_token = request.COOKIES.get('refresh_token')
+        if not refresh_token:
+            return Response({'detail': 'No refresh token'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Inyectar el refresh desde la cookie directo al serializer (mismo flujo que TokenViewBase)
+        serializer = self.get_serializer(data={'refresh': refresh_token})
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError as e:
+            raise InvalidToken(e.args[0])
+
+        response = Response(serializer.validated_data, status=status.HTTP_200_OK)
+
+        new_refresh = response.data.get('refresh')
+        if new_refresh:
+            set_refresh_cookie(response, new_refresh)
+            del response.data['refresh']
+        return response
+
+
+class LogoutView(APIView):
+    """Logout: blacklistea el refresh de la cookie y limpia la cookie (idempotente)."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        refresh_token = request.COOKIES.get('refresh_token')
+        if refresh_token:
+            try:
+                RefreshToken(refresh_token).blacklist()
+            except Exception:
+                # Token inválido/expirado/ya blacklistado: seguimos y limpiamos igual
+                pass
+        response = Response({'detail': 'Logged out'})
+        clear_refresh_cookie(response)
         return response
 
 
@@ -793,3 +846,27 @@ class PublicCalendarioView(APIView):
         ).select_related('tipo').order_by('fecha_inicio')
         serializer = EventoCalendarioSerializer(eventos, many=True)
         return Response(serializer.data)
+
+# ============================================================
+# SOLICITUD DE DEMO
+# ============================================================
+from .models import DemoRequest
+from .serializers import DemoRequestSerializer
+
+class DemoRequestViewSet(viewsets.ModelViewSet):
+    """
+    Endpoint para recibir solicitudes de demo desde la landing/login.
+    POST público (sin autenticar). GET y PATCH solo para admins autenticados.
+    """
+    queryset = DemoRequest.objects.all()
+    serializer_class = DemoRequestSerializer
+    http_method_names = ['get', 'post', 'patch', 'options']
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        # Acá a futuro podés agregar lógica para mandarte un email automático
+        serializer.save()

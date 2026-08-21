@@ -21,6 +21,10 @@ from .views import UserViewSet, UsuarioGymViewSet, MembresiaViewSet, Home, PagoM
 from .services.notifications import NotificationManager
 from .storage import SupabaseMediaStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.conf import settings
+from django.test.utils import override_settings
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
 
 
 def _utc(year, month, day, hour=0, minute=0):
@@ -1915,3 +1919,275 @@ class NotificationViewSetTest(TestCase):
             self.client.post('/gym/api/v1/membership-notifications/read/', {}).status_code,
             status.HTTP_404_NOT_FOUND,
         )
+
+
+# ============================================================
+# AUTH COOKIE JWT — TESTS (cambio auth-refresh-jwt)
+# ============================================================
+
+def _make_staff_user(gimnasio, email="admin@example.com", password="secret"):
+    """Crea un usuario staff (admin) para los tests de auth."""
+    return Usuario.objects.create_user(
+        email=email,
+        name="Admin",
+        lastname="User",
+        password=password,
+        roles="admin",
+        gimnasio=gimnasio,
+    )
+
+
+class AuthCookieHelperTest(TestCase):
+    """Unit tests para el helper compartido de cookie (gimnasioApp/auth_cookie.py)."""
+
+    def test_set_refresh_cookie_sets_exact_attributes(self):
+        """set_refresh_cookie define key, httponly, path, max_age, samesite y secure (dev)."""
+        from .auth_cookie import set_refresh_cookie
+        from rest_framework.response import Response
+
+        response = Response()
+        with override_settings(DEBUG=True):
+            set_refresh_cookie(response, "token-value")
+
+        cookie = response.cookies['refresh_token']
+        self.assertEqual(cookie.value, 'token-value')
+        self.assertTrue(cookie['httponly'])
+        self.assertEqual(cookie['path'], '/gym/api/v1/')
+        self.assertEqual(cookie['max-age'], 604800)
+        self.assertEqual(cookie['samesite'], 'Lax')
+        self.assertFalse(cookie['secure'])
+
+    def test_set_refresh_cookie_prod_attributes(self):
+        """En producción (DEBUG=False) la cookie usa SameSite=None + Secure."""
+        from .auth_cookie import set_refresh_cookie
+        from rest_framework.response import Response
+
+        response = Response()
+        with override_settings(DEBUG=False):
+            set_refresh_cookie(response, "token-value")
+
+        cookie = response.cookies['refresh_token']
+        self.assertEqual(cookie['samesite'], 'None')
+        self.assertTrue(cookie['secure'])
+
+    def test_clear_refresh_cookie_expires_cookie(self):
+        """clear_refresh_cookie expira la cookie (Max-Age=0) en el mismo path."""
+        from .auth_cookie import clear_refresh_cookie
+        from rest_framework.response import Response
+
+        response = Response()
+        clear_refresh_cookie(response)
+
+        cookie = response.cookies['refresh_token']
+        self.assertEqual(cookie['max-age'], 0)
+        self.assertEqual(cookie['path'], '/gym/api/v1/')
+
+    def test_refresh_cookie_path_covers_refresh_and_logout(self):
+        """RFC 6265 §5.4: el Path de la cookie debe ser prefijo de /token/refresh/
+        Y de /auth/logout/; si no cubre el logout, el browser omite la cookie y el
+        blacklist server-side queda inalcanzable (regresión del bug de path-match)."""
+        from django.urls import reverse
+        from .auth_cookie import REFRESH_COOKIE_PATH
+
+        self.assertTrue(reverse('token_refresh').startswith(REFRESH_COOKIE_PATH))
+        self.assertTrue(reverse('auth_logout').startswith(REFRESH_COOKIE_PATH))
+
+
+class AuthCookieLoginTest(TestCase):
+    """Login (POST /gym/api/v1/token/) establece la cookie y devuelve solo access."""
+
+    def setUp(self):
+        self.gimnasio = Gimnasio.objects.create(name="Auth Gym")
+        self.user = _make_staff_user(self.gimnasio)
+
+    def test_login_sets_refresh_cookie_and_returns_access_only(self):
+        """Escenario spec: login exitoso → 200, body {access} sin refresh, cookie con atributos."""
+        response = self.client.post('/gym/api/v1/token/', {
+            'email': self.user.email,
+            'password': 'secret',
+        }, content_type='application/json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        body = response.json()
+        self.assertIn('access', body)
+        self.assertNotIn('refresh', body)
+
+        cookie = response.cookies['refresh_token']
+        self.assertNotEqual(cookie.value, '')
+        self.assertTrue(cookie['httponly'])
+        self.assertEqual(cookie['path'], '/gym/api/v1/')
+        self.assertEqual(cookie['max-age'], 604800)
+        # El helper lee settings.DEBUG dinámicamente (None+Secure en prod, Lax en dev)
+        expected_samesite = 'None' if not settings.DEBUG else 'Lax'
+        expected_secure = not settings.DEBUG
+        self.assertEqual(cookie['samesite'], expected_samesite)
+        self.assertEqual(bool(cookie['secure']), expected_secure)
+
+    def test_login_invalid_credentials_returns_401_no_cookie(self):
+        """Escenario spec: credenciales inválidas → 401 sin cookie."""
+        response = self.client.post('/gym/api/v1/token/', {
+            'email': self.user.email,
+            'password': 'wrong-password',
+        }, content_type='application/json')
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertNotIn('refresh_token', response.cookies)
+
+    def test_login_missing_fields_returns_400(self):
+        """Escenario spec: body vacío → 400 con errores de validación."""
+        response = self.client.post('/gym/api/v1/token/', {}, content_type='application/json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.json())
+        self.assertIn('password', response.json())
+
+    def test_register_sets_refresh_cookie_via_shared_helper(self):
+        """El registro sigue funcionando y usa el mismo helper de cookie."""
+        response = self.client.post('/gym/api/v1/register/', {
+            'email': 'new@example.com',
+            'password': 'secret123',
+            'name': 'New',
+            'lastname': 'User',
+        }, content_type='application/json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        cookie = response.cookies['refresh_token']
+        self.assertNotEqual(cookie.value, '')
+        self.assertTrue(cookie['httponly'])
+        self.assertEqual(cookie['path'], '/gym/api/v1/')
+        self.assertEqual(cookie['max-age'], 604800)
+        expected_samesite = 'None' if not settings.DEBUG else 'Lax'
+        self.assertEqual(cookie['samesite'], expected_samesite)
+
+
+class AuthCookieRefreshTest(TestCase):
+    """Refresh (POST /gym/api/v1/token/refresh/) lee la cookie, rota y devuelve access."""
+
+    def setUp(self):
+        self.gimnasio = Gimnasio.objects.create(name="Auth Gym")
+        self.user = _make_staff_user(self.gimnasio)
+        self.login = self.client.post('/gym/api/v1/token/', {
+            'email': self.user.email,
+            'password': 'secret',
+        }, content_type='application/json')
+        self.old_refresh = self.login.cookies['refresh_token'].value
+        # jti del token ORIGINAL (capturado antes de que la rotación lo blacklistee)
+        self.old_jti = RefreshToken(self.old_refresh).payload['jti']
+
+    def test_refresh_from_cookie_returns_new_access_and_rotates(self):
+        """Escenario spec: refresh body-less → 200, access nuevo, cookie rotada, viejo blacklisted."""
+        response = self.client.post('/gym/api/v1/token/refresh/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        body = response.json()
+        self.assertIn('access', body)
+        self.assertNotIn('refresh', body)
+
+        new_refresh = response.cookies['refresh_token'].value
+        self.assertNotEqual(new_refresh, self.old_refresh)
+        self.assertEqual(response.cookies['refresh_token']['path'], '/gym/api/v1/')
+        self.assertTrue(BlacklistedToken.objects.filter(token__jti=self.old_jti).exists())
+
+    def test_refresh_without_cookie_returns_401(self):
+        """Escenario spec: sin cookie → 401 con detail 'No refresh token'."""
+        self.client.cookies.clear()
+        response = self.client.post('/gym/api/v1/token/refresh/')
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.json(), {'detail': 'No refresh token'})
+
+    def test_refresh_with_expired_cookie_returns_401(self):
+        """Escenario spec: cookie con refresh expirado → 401."""
+        expired = RefreshToken.for_user(self.user)
+        expired.set_exp(lifetime=timedelta(seconds=-1))
+        self.client.cookies['refresh_token'] = str(expired)
+
+        response = self.client.post('/gym/api/v1/token/refresh/')
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_refresh_with_blacklisted_cookie_returns_401(self):
+        """Escenario spec: cookie con refresh blacklistado → 401."""
+        # Forzamos el blacklist manualmente sobre el token original.
+        RefreshToken(self.old_refresh).blacklist()
+        self.client.cookies['refresh_token'] = self.old_refresh
+
+        response = self.client.post('/gym/api/v1/token/refresh/')
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_sequential_refresh_second_tab_gets_401(self):
+        """Escenario multi-tab: la segunda pestaña (cookie vieja) recibe 401 tras la rotación."""
+        first = self.client.post('/gym/api/v1/token/refresh/')
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+
+        # Tab B usa la cookie vieja (ya blacklistada por la rotación de Tab A)
+        self.client.cookies['refresh_token'] = self.old_refresh
+        second = self.client.post('/gym/api/v1/token/refresh/')
+
+        self.assertEqual(second.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class AuthCookieLogoutTest(TestCase):
+    """Logout (POST /gym/api/v1/auth/logout/) blacklistea, limpia cookie y es idempotente."""
+
+    def setUp(self):
+        self.gimnasio = Gimnasio.objects.create(name="Auth Gym")
+        self.user = _make_staff_user(self.gimnasio)
+        self.login = self.client.post('/gym/api/v1/token/', {
+            'email': self.user.email,
+            'password': 'secret',
+        }, content_type='application/json')
+        self.old_refresh = self.login.cookies['refresh_token'].value
+        self.old_jti = RefreshToken(self.old_refresh).payload['jti']
+
+    def test_logout_blacklists_token_and_clears_cookie(self):
+        """Escenario spec: logout → 200, token blacklistado, cookie expirada, refresh posterior 401."""
+        response = self.client.post('/gym/api/v1/auth/logout/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(BlacklistedToken.objects.filter(token__jti=self.old_jti).exists())
+        self.assertEqual(response.cookies['refresh_token']['max-age'], 0)
+
+        # Un refresh con la cookie vieja ahora debe fallar con 401
+        self.client.cookies['refresh_token'] = self.old_refresh
+        refresh = self.client.post('/gym/api/v1/token/refresh/')
+        self.assertEqual(refresh.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_logout_without_cookie_is_idempotent(self):
+        """Escenario spec: logout sin cookie → 200 sin error."""
+        self.client.cookies.clear()
+        response = self.client.post('/gym/api/v1/auth/logout/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), {'detail': 'Logged out'})
+
+    def test_logout_with_blacklisted_token_is_idempotent(self):
+        """Escenario spec: logout con token ya blacklistado → 200 sin excepción."""
+        self.client.post('/gym/api/v1/auth/logout/')
+        self.client.cookies['refresh_token'] = self.old_refresh
+
+        response = self.client.post('/gym/api/v1/auth/logout/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.cookies['refresh_token']['max-age'], 0)
+
+
+class AuthSettingsTest(TestCase):
+    """Tests de configuración del cambio auth-refresh-jwt."""
+
+    def test_rotate_refresh_tokens_is_true(self):
+        """Escenario spec: ROTATE_REFRESH_TOKENS=True en SIMPLE_JWT."""
+        self.assertTrue(settings.SIMPLE_JWT['ROTATE_REFRESH_TOKENS'])
+
+    def test_single_cors_allowed_origins_definition(self):
+        """Escenario spec: una sola definición de CORS_ALLOWED_ORIGINS (Vite 5173 + Vercel)."""
+        self.assertEqual(settings.CORS_ALLOWED_ORIGINS, [
+            "http://localhost:5173",
+            "https://controlfit.vercel.app",
+        ])
+
+    def test_auth_cookie_vestigial_block_removed(self):
+        """El helper lee settings.DEBUG directamente; el bloque AUTH_COOKIE_* vestigial se eliminó."""
+        self.assertNotIn('AUTH_COOKIE', settings.SIMPLE_JWT)
+        self.assertNotIn('AUTH_COOKIE_SAMESITE', settings.SIMPLE_JWT)

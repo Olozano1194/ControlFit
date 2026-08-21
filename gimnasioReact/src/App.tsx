@@ -1,9 +1,12 @@
 import {Routes, Route, Navigate } from 'react-router-dom';
+//Context
+import { useAuth } from './context/useAuth';
 //Layouts
 import LayoutAdmin from './layouts/LayoutAdmin';
 //Pages auth
 import Login from './pages/auth/LoginPage';
 import Register from './pages/auth/RegisterPage';
+import SolicitarDemo from './pages/auth/SolicitarDemoPage';
 import ForgetPassword from './pages/auth/ForgetPassword';
 //Pages admin
 import Home from './pages/admin/HomePage';
@@ -24,18 +27,36 @@ import ListAsignarMemberShips from './pages/admin/asignadaMemberShips/ListAsigna
 import NotificationsPage from './pages/admin/notifications/NotificationsPage';
 // Calendario
 import CalendarPage from './pages/admin/calendario/CalendarioPage';
-//Ruta protegida
+// Solicitudes Demo (plataforma)
+import DemoRequestsPage from './pages/admin/demo/DemoRequestsPage';
+//Rutas protegidas
 import ProtectRoute from './routes/protectedRoute/ProtectRoute';
+import SuperAdminRoute from './routes/protectedRoute/SuperAdminRoute';
 
 import Error404 from './pages/Error404';
+
+// Redirige la raíz según sesión: con sesión válida a /dashboard, sin sesión a /login.
+// Espera el loading para no mandar al login a un usuario con sesión restaurable.
+const HomeRedirect = () => {
+    const { isAuthenticated, loading } = useAuth();
+    if (loading) return null;
+    return <Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />;
+};
 
 function App() {
   return (
     <Routes>        
-      <Route path="/" element={<Navigate to='/login' />} />
+      <Route path="/" element={<HomeRedirect />} />
       <Route path="login" element={<Login />} />
+      <Route path="solicitar-demo" element={<SolicitarDemo />} />
       <Route path="forget-password" element={<ForgetPassword />} />
-      {/* Rutas protegidas */}
+
+      {/* Rutas de la plataforma — solo superadmin */}
+      <Route element={<SuperAdminRoute />}>
+        <Route path="platform/solicitudes-demo" element={<DemoRequestsPage />} />
+      </Route>
+
+      {/* Rutas protegidas del gimnasio */}
       <Route element={<ProtectRoute />} >
         <Route path="dashboard" element={<LayoutAdmin />} >
           <Route index element={<Home />} />
@@ -56,7 +77,7 @@ function App() {
           <Route path="memberships-list" element={<ListMemberShips />} />
           <Route path="membresia/:id" element={<MemberShipsForm />} />
           {/* Asignación Membresía */}
-          <Route path="asignar-membresia-list" element={<ListAsignarMemberShips /> } />
+          <Route path="asignar-membresia-list" element={<ListAsignarMemberShips />} />
           {/* Notificaciones */}
           <Route path="notifications" element={<NotificationsPage />} />
           {/* Calendario */}

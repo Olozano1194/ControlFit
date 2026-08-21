@@ -1,7 +1,7 @@
 import { HiMiniUserGroup } from "react-icons/hi2";
 import { FaCreditCard } from "react-icons/fa";
 
-export type UserRole = 'admin' | 'recepcion';
+export type UserRole = 'admin' | 'recepcion' | 'superadmin';
 
 export interface SidebarMenu {
   key: string;

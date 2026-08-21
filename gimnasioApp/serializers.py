@@ -409,3 +409,14 @@ class NotificationSerializer(serializers.ModelSerializer):
         fields = ['id', 'tipo', 'titulo', 'mensaje', 'fecha', 'relacion_tipo',
                   'relacion_id', 'link', 'whatsapp_link', 'is_read', 'read_at', 'created_at']
         read_only_fields = ('id', 'gimnasio', 'is_read', 'read_at', 'created_at')
+
+# ============================================================
+# SOLICITUD DE DEMO
+# ============================================================
+from .models import DemoRequest
+
+class DemoRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DemoRequest
+        fields = '__all__'
+        read_only_fields = ('id', 'fecha_solicitud')

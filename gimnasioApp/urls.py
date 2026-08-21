@@ -1,11 +1,6 @@
 from django.urls import path, include
 from rest_framework import routers
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
-    TokenBlacklistView,
-)
-from .views import UserViewSet, userProfileView, UsuarioGymViewSet, UsuarioGymDayViewSet, Home, MembresiaViewSet, MembresiaAsignadaViewSet, PagoMembresiaViewSet, ActivitiesView, ExportReportView, RegisterViewSet, DashboardStatsView, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView, NotificationViewSet
+from .views import UserViewSet, userProfileView, UsuarioGymViewSet, UsuarioGymDayViewSet, Home, MembresiaViewSet, MembresiaAsignadaViewSet, PagoMembresiaViewSet, ActivitiesView, ExportReportView, RegisterViewSet, DashboardStatsView, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView, NotificationViewSet, CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView
 
 #api versioning
 router = routers.DefaultRouter()
@@ -17,6 +12,9 @@ router.register(r'MemberShipsAsignada', MembresiaAsignadaViewSet, basename='Memb
 router.register(r'TiposEvento', TipoEventoViewSet, basename='TiposEvento')
 router.register(r'CalendarioEventos', EventoCalendarioViewSet, basename='CalendarioEventos')
 router.register(r'Notificaciones', NotificationViewSet, basename='Notificaciones')
+
+from .views import DemoRequestViewSet
+router.register(r'solicitudes-demo', DemoRequestViewSet, basename='solicitudes-demo')
 
 urlpatterns = [
     path('gym/api/v1/', include(router.urls)),      
@@ -32,10 +30,10 @@ urlpatterns = [
     path('gym/api/v1/activities/', ActivitiesView.as_view(), name='activities'),
     path('gym/api/v1/export-report/', ExportReportView.as_view(), name='export-report'),
     
-    # SimpleJWT endpoints
-    path('gym/api/v1/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('gym/api/v1/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('gym/api/v1/token/blacklist/', TokenBlacklistView.as_view(), name='token_blacklist'),
+    # SimpleJWT endpoints (cookie-based: login/refresh/logout)
+    path('gym/api/v1/token/', CookieTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('gym/api/v1/token/refresh/', CookieTokenRefreshView.as_view(), name='token_refresh'),
+    path('gym/api/v1/auth/logout/', LogoutView.as_view(), name='auth_logout'),
     
     # Endpoint público de calendario (NO bajo /gym/api/v1)
     path('api/calendario/publico/<int:gimnasio_id>/', PublicCalendarioView.as_view(), name='calendario-publico'),

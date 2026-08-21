@@ -61,7 +61,8 @@ class Usuario(AbstractBaseUser):
         
     OPCIONES_ROL = [
         ('recepcion', 'Recepcionista'),
-        ('admin', 'Administrador')
+        ('admin', 'Administrador'),
+        ('superadmin', 'Super Administrador'),
     ]
     roles = models.CharField(max_length=10, choices=OPCIONES_ROL, default='recepcion')
     #password = models.CharField(max_length=300)
@@ -390,3 +391,27 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"{self.get_tipo_display()} - {self.titulo}"
+
+# ============================================================
+# SOLICITUD DE DEMO
+# ============================================================
+class DemoRequest(models.Model):
+    ESTADOS = (
+        ('pendiente', 'Pendiente'),
+        ('contactado', 'Contactado'),
+    )
+    nombre = models.CharField(max_length=150)
+    email = models.EmailField()
+    telefono = models.CharField(max_length=20)
+    nombre_gimnasio = models.CharField(max_length=150)
+    estado = models.CharField(max_length=20, choices=ESTADOS, default='pendiente')
+    fecha_solicitud = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'demo_request'
+        verbose_name = 'Solicitud de Demo'
+        verbose_name_plural = 'Solicitudes de Demo'
+        ordering = ['-fecha_solicitud']
+
+    def __str__(self):
+        return f"{self.nombre_gimnasio} - {self.nombre}"
