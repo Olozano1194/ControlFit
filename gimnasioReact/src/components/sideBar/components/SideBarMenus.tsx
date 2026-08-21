@@ -64,6 +64,15 @@ export const sidebarMenus: SidebarMenu[] = [
     ],
     roles: ['admin', 'recepcion']
   },
+  {
+    key: "menu6",
+    title: "Solicitudes Demo",
+    icon: <HiMiniUserGroup />,
+    items: [
+      { label: "Ver Solicitudes", to: "solicitudes-demo" },
+    ],
+    roles: ['admin']
+  },
 ];
 
 /**

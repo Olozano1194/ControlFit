@@ -27,6 +27,8 @@ import ListAsignarMemberShips from './pages/admin/asignadaMemberShips/ListAsigna
 import NotificationsPage from './pages/admin/notifications/NotificationsPage';
 // Calendario
 import CalendarPage from './pages/admin/calendario/CalendarioPage';
+// Solicitudes Demo
+import DemoRequestsPage from './pages/admin/demo/DemoRequestsPage';
 //Ruta protegida
 import ProtectRoute from './routes/protectedRoute/ProtectRoute';
 
@@ -73,6 +75,8 @@ function App() {
           <Route path="notifications" element={<NotificationsPage />} />
           {/* Calendario */}
           <Route path="calendar" element={<CalendarPage />} />
+          {/* Solicitudes Demo */}
+          <Route path="solicitudes-demo" element={<DemoRequestsPage />} />
         </Route> 
       </Route>       
       <Route path="*" element={<Error404 />} />

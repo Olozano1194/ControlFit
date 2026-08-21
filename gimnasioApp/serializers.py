@@ -419,4 +419,4 @@ class DemoRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = DemoRequest
         fields = '__all__'
-        read_only_fields = ('id', 'fecha_solicitud', 'estado')
+        read_only_fields = ('id', 'fecha_solicitud')

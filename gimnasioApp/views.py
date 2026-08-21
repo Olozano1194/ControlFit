@@ -856,12 +856,16 @@ from .serializers import DemoRequestSerializer
 class DemoRequestViewSet(viewsets.ModelViewSet):
     """
     Endpoint para recibir solicitudes de demo desde la landing/login.
-    Solo permite creación (POST) públicamente.
+    POST público (sin autenticar). GET y PATCH solo para admins autenticados.
     """
     queryset = DemoRequest.objects.all()
     serializer_class = DemoRequestSerializer
-    permission_classes = [AllowAny]
-    http_method_names = ['post', 'options']
+    http_method_names = ['get', 'post', 'patch', 'options']
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
     def perform_create(self, serializer):
         # Acá a futuro podés agregar lógica para mandarte un email automático
