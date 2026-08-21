@@ -26,7 +26,7 @@ export type BlacklistRequest = {
     refresh: string;
 }
 
-export type UserRole = 'admin' | 'recepcion';
+export type UserRole = 'admin' | 'recepcion' | 'superadmin';
 
 export interface AuthUser {
     name: string;

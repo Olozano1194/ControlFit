@@ -61,7 +61,8 @@ class Usuario(AbstractBaseUser):
         
     OPCIONES_ROL = [
         ('recepcion', 'Recepcionista'),
-        ('admin', 'Administrador')
+        ('admin', 'Administrador'),
+        ('superadmin', 'Super Administrador'),
     ]
     roles = models.CharField(max_length=10, choices=OPCIONES_ROL, default='recepcion')
     #password = models.CharField(max_length=300)

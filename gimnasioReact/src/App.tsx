@@ -27,10 +27,11 @@ import ListAsignarMemberShips from './pages/admin/asignadaMemberShips/ListAsigna
 import NotificationsPage from './pages/admin/notifications/NotificationsPage';
 // Calendario
 import CalendarPage from './pages/admin/calendario/CalendarioPage';
-// Solicitudes Demo
+// Solicitudes Demo (plataforma)
 import DemoRequestsPage from './pages/admin/demo/DemoRequestsPage';
-//Ruta protegida
+//Rutas protegidas
 import ProtectRoute from './routes/protectedRoute/ProtectRoute';
+import SuperAdminRoute from './routes/protectedRoute/SuperAdminRoute';
 
 import Error404 from './pages/Error404';
 
@@ -49,7 +50,13 @@ function App() {
       <Route path="login" element={<Login />} />
       <Route path="solicitar-demo" element={<SolicitarDemo />} />
       <Route path="forget-password" element={<ForgetPassword />} />
-      {/* Rutas protegidas */}
+
+      {/* Rutas de la plataforma — solo superadmin */}
+      <Route element={<SuperAdminRoute />}>
+        <Route path="platform/solicitudes-demo" element={<DemoRequestsPage />} />
+      </Route>
+
+      {/* Rutas protegidas del gimnasio */}
       <Route element={<ProtectRoute />} >
         <Route path="dashboard" element={<LayoutAdmin />} >
           <Route index element={<Home />} />
@@ -70,13 +77,11 @@ function App() {
           <Route path="memberships-list" element={<ListMemberShips />} />
           <Route path="membresia/:id" element={<MemberShipsForm />} />
           {/* Asignación Membresía */}
-          <Route path="asignar-membresia-list" element={<ListAsignarMemberShips /> } />
+          <Route path="asignar-membresia-list" element={<ListAsignarMemberShips />} />
           {/* Notificaciones */}
           <Route path="notifications" element={<NotificationsPage />} />
           {/* Calendario */}
           <Route path="calendar" element={<CalendarPage />} />
-          {/* Solicitudes Demo */}
-          <Route path="solicitudes-demo" element={<DemoRequestsPage />} />
         </Route> 
       </Route>       
       <Route path="*" element={<Error404 />} />

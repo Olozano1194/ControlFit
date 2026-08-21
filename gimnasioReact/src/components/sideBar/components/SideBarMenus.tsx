@@ -1,7 +1,7 @@
 import { HiMiniUserGroup } from "react-icons/hi2";
 import { FaCreditCard } from "react-icons/fa";
 
-export type UserRole = 'admin' | 'recepcion';
+export type UserRole = 'admin' | 'recepcion' | 'superadmin';
 
 export interface SidebarMenu {
   key: string;
@@ -63,15 +63,6 @@ export const sidebarMenus: SidebarMenu[] = [
       { label: "Ver Asignaciones", to: "asignar-membresia-list" },
     ],
     roles: ['admin', 'recepcion']
-  },
-  {
-    key: "menu6",
-    title: "Solicitudes Demo",
-    icon: <HiMiniUserGroup />,
-    items: [
-      { label: "Ver Solicitudes", to: "solicitudes-demo" },
-    ],
-    roles: ['admin']
   },
 ];
 
