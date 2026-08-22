@@ -10,7 +10,7 @@ export interface AuthContextType {
     login: (credentials: {
         email: string;
         password: string;
-    }) => Promise<void>;
+    }) => Promise<AuthUser | null>;
     logout: () => void;
     updateUserData: (data: Partial<AuthUser>) => void;
 }

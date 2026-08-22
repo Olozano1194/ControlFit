@@ -1,10 +1,12 @@
 import { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { RiArrowRightSLine } from "react-icons/ri";
+import { pathMatches } from "./SideBarMenus";
 
 interface SubMenuItem {
   label: string;
   to: string;
+  external?: boolean;
 }
 
 interface SidebarSubMenuProps {
@@ -45,23 +47,26 @@ export const SidebarSubMenu = ({
     </button>
 
     <ul className={`mt-2 ${!isOpen ? "hidden" : ""}`}>
-      {items.map((item) => (
-        <li key={item.to}>
-          <Link
-            to={item.to}
-            className={`py-2 px-4 border-l block ml-6 relative font-semibold transition-colors ${
-              activeItem === item.to
-                ? 'text-primary border-l-primary before:bg-primary before:border-primary'
-                : 'border-l-nav/30 text-nav before:bg-primary before:border-nav hover:text-nav/70'
-            }
-            before:w-3 before:h-3 before:absolute before:rounded-full
-            before:left-[-6.5px] before:top-1/2 before:-translate-y-1/2
-            before:border-4`}
-          >
-            {item.label}
-          </Link>
-        </li>
-      ))}
+      {items.map((item) => {
+        const isActive = activeItem && pathMatches(activeItem, item.to, item.external);
+        return (
+          <li key={item.to}>
+            <Link
+              to={item.to}
+              className={`py-2 px-4 border-l block ml-6 relative font-semibold transition-colors ${
+                isActive
+                  ? 'text-primary border-l-primary before:bg-primary before:border-primary'
+                  : 'border-l-nav/30 text-nav before:bg-primary before:border-nav hover:text-nav/70'
+              }
+              before:w-3 before:h-3 before:absolute before:rounded-full
+              before:left-[-6.5px] before:top-1/2 before:-translate-y-1/2
+              before:border-4`}
+            >
+              {item.label}
+            </Link>
+          </li>
+        );
+      })}
     </ul>
   </li>
 );

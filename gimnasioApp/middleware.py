@@ -4,6 +4,8 @@ class GimnasioMiddleware:
 
     def __call__(self, request):
         if hasattr(request, 'user') and request.user.is_authenticated:
+            # Superadmin no tiene gimnasio asignado - request.gimnasio queda en None
+            # Los viewsets/mixins verificarán el rol para bypassear el filtro multi-tenant
             request.gimnasio = getattr(request.user, 'gimnasio', None)
         else:
             request.gimnasio = None

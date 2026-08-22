@@ -8,7 +8,7 @@ import { MdOutlineSupportAgent } from "react-icons/md";
 import { RiMessage3Fill, RiCalendarTodoLine, RiHome8Line } from "react-icons/ri";
 
 
-export type SubMenuKey = 'menu1' | 'menu2' | 'menu3' | 'menu4' | 'menu5';
+export type SubMenuKey = 'menu1' | 'menu2' | 'menu3' | 'menu4' | 'menu5' | 'menu6';
 
 export interface SubMenuState {
   menu1: boolean;
@@ -16,6 +16,7 @@ export interface SubMenuState {
   menu3: boolean;
   menu4: boolean;
   menu5: boolean;
+  menu6: boolean;
 }
 
 interface SidebarAdminProps {
@@ -31,14 +32,14 @@ const SideBarAdmin = ({ showSubmenu, handleToggleSubMenu, currentPath }: Sidebar
     // Determinar qué rutas están activas
     const isHomeActive = currentPath === '/dashboard' || currentPath === '/dashboard/';
 
-    const getActiveItem = (items: { label: string; to: string }[]) => {
-      return items.find(item => pathMatches(currentPath, item.to))?.to;
+    const getActiveItem = (items: { label: string; to: string; external?: boolean }[]) => {
+      return items.find(item => pathMatches(currentPath, item.to, item.external))?.to;
     };
 
     const isParentActive = (menuKey: string) => {
       const menu = sidebarMenus.find(m => m.key === menuKey);
       if (!menu) return false;
-      return menu.items.some(item => pathMatches(currentPath, item.to));
+      return menu.items.some(item => pathMatches(currentPath, item.to, item.external));
     };
 
     return (

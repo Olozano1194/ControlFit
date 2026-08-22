@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.db import transaction
 from django.core.exceptions import ValidationError as DjangoValidationError
-from .models import Gimnasio, Usuario, UsuarioGym, UsuarioGymDay, Membresia, MembresiaAsignada, PagoMembresia, TipoEvento, EventoCalendario, Notification
+from .models import Gimnasio, Usuario, UsuarioGym, UsuarioGymDay, Membresia, MembresiaAsignada, PagoMembresia, TipoEvento, EventoCalendario, Notification, DemoRequest
 from datetime import timedelta, date
 from decimal import Decimal
 
@@ -49,6 +49,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """
         Crea usuario. Usa request.gimnasio si está disponible, si no (registro), crea gimnasio automáticamente.
+        Para superadmin, no requiere gimnasio.
         """
         password = validated_data.pop('password')
         # Remover gimnasio de validated_data si viene de perform_create
@@ -56,9 +57,13 @@ class UsuarioSerializer(serializers.ModelSerializer):
 
         request = self.context.get('request')
         gimnasio = getattr(request, 'gimnasio', None)
+        roles = validated_data.get('roles', 'recepcion')
 
-        if gimnasio is None:
-            # Flujo de registro: crear gimnasio automáticamente
+        # Superadmin no requiere gimnasio
+        if roles == 'superadmin':
+            gimnasio = None
+        elif gimnasio is None:
+            # Flujo de registro normal: crear gimnasio automáticamente
             email = validated_data.get('email', '')
             email_prefix = email.split('@')[0].replace('.', ' ').title() if '@' in email else email
             gimnasio = Gimnasio.objects.create(
@@ -420,3 +425,65 @@ class DemoRequestSerializer(serializers.ModelSerializer):
         model = DemoRequest
         fields = '__all__'
         read_only_fields = ('id', 'fecha_solicitud')
+
+
+# ============================================================
+# PLATFORM — SUPERADMIN SERIALIZERS
+# ============================================================
+
+class PlatformStatsSerializer(serializers.Serializer):
+    total_gimnasios = serializers.IntegerField()
+    gimnasios_activos = serializers.IntegerField()
+    total_usuarios_staff = serializers.IntegerField()
+    demo_pendientes = serializers.IntegerField()
+    demo_contactados = serializers.IntegerField()
+    ingresos_mes_global = serializers.DecimalField(max_digits=14, decimal_places=2)
+    miembros_activos_global = serializers.IntegerField()
+    retencion_promedio = serializers.DecimalField(max_digits=5, decimal_places=1)
+
+
+class UsuarioPlatformSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Usuario
+        fields = ['id', 'email', 'name', 'lastname', 'roles', 'is_active']
+
+
+class MiembroActivoSerializer(serializers.ModelSerializer):
+    membresia = serializers.CharField(source='membresia.name', read_only=True)
+    dateFinal = serializers.DateField(format="%d-%m-%Y", read_only=True)
+    saldo_pendiente = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = UsuarioGym
+        fields = ['id', 'name', 'lastname', 'membresia', 'dateFinal', 'saldo_pendiente']
+
+
+class PagoPlatformSerializer(serializers.ModelSerializer):
+    miembro_name = serializers.CharField(source='membresia_asignada.miembro.name', read_only=True)
+    miembro_lastname = serializers.CharField(source='membresia_asignada.miembro.lastname', read_only=True)
+    membresia_name = serializers.CharField(source='membresia_asignada.membresia.name', read_only=True)
+
+    class Meta:
+        model = PagoMembresia
+        fields = ['id', 'monto', 'fecha_pago', 'metodo_pago', 'miembro_name', 'miembro_lastname', 'membresia_name']
+
+
+class GimnasioPlatformSerializer(serializers.ModelSerializer):
+    usuarios_count = serializers.IntegerField(read_only=True)
+    miembros_activos_count = serializers.IntegerField(read_only=True)
+    ingresos_mes = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = Gimnasio
+        fields = ['id', 'name', 'address', 'phone', 'is_active', 'created_at',
+                  'usuarios_count', 'miembros_activos_count', 'ingresos_mes']
+        read_only_fields = ('id', 'created_at', 'usuarios_count', 'miembros_activos_count', 'ingresos_mes')
+
+
+class GimnasioPlatformDetailSerializer(GimnasioPlatformSerializer):
+    usuarios = UsuarioPlatformSerializer(many=True, read_only=True)
+    miembros_activos = MiembroActivoSerializer(many=True, read_only=True)
+    ultimos_pagos = PagoPlatformSerializer(many=True, read_only=True)
+
+    class Meta(GimnasioPlatformSerializer.Meta):
+        fields = GimnasioPlatformSerializer.Meta.fields + ['usuarios', 'miembros_activos', 'ultimos_pagos']

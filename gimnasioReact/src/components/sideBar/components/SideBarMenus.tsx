@@ -1,5 +1,6 @@
 import { HiMiniUserGroup } from "react-icons/hi2";
 import { FaCreditCard } from "react-icons/fa";
+import { IoMdGlobe } from "react-icons/io";
 
 export type UserRole = 'admin' | 'recepcion' | 'superadmin';
 
@@ -10,6 +11,7 @@ export interface SidebarMenu {
   items: Array<{
     label: string;
     to: string;
+    external?: boolean; // Para rutas fuera de /dashboard (ej: /platform/...)
   }>;
   roles: UserRole[];
 }
@@ -64,14 +66,28 @@ export const sidebarMenus: SidebarMenu[] = [
     ],
     roles: ['admin', 'recepcion']
   },
+  {
+    key: "menu6",
+    title: "Plataforma",
+    icon: <IoMdGlobe />,
+    items: [
+      { label: "Solicitudes Demo", to: "/platform/solicitudes-demo", external: true },
+    ],
+    roles: ['superadmin']
+  },
 ];
 
 /**
  * Verifica si una ruta actual coincide con un item del sidebar.
  * Compara por segmentos de path para evitar falsos positivos
  * (ej: "miembros" no debe coincidir con "miembros-day").
+ * Para rutas externas (external: true), compara la ruta completa.
  */
-export const pathMatches = (currentPath: string, itemTo: string): boolean => {
+export const pathMatches = (currentPath: string, itemTo: string, isExternal?: boolean): boolean => {
+    if (isExternal) {
+        const path = currentPath.endsWith('/') ? currentPath.slice(0, -1) : currentPath;
+        return path === itemTo || path.startsWith(itemTo + '/');
+    }
     const path = currentPath.endsWith('/') ? currentPath.slice(0, -1) : currentPath;
     return path === `/dashboard/${itemTo}` || path.startsWith(`/dashboard/${itemTo}/`);
 };

@@ -33,13 +33,18 @@ const Login = () => {
     if (isSubmitting) return; // Evitar doble envío
     setIsSubmitting(true);
     try {
-      await login({
+      const loggedUser = await login({
         email: data.email,
         password: data.password,
       });
 
       toast.success('Login exitoso');
-      navigate("/dashboard");
+      // Superadmin va al dashboard de plataforma, resto al dashboard normal
+      if (loggedUser?.roles?.includes('superadmin')) {
+        navigate('/platform/solicitudes-demo');
+      } else {
+        navigate('/dashboard');
+      }
     } catch {
       toast.error("Error al iniciar sesión");
     } finally {
