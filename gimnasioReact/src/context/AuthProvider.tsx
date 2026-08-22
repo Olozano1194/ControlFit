@@ -44,7 +44,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadUser = async () => {
+  const loadUser = async (): Promise<AuthUser | null> => {
     setLoading(true);
     setError(null);
 
@@ -56,16 +56,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       let rolesArray: UserRole[] = [];
 
       if (data.user.roles) {
-        const rawRoles = Array.isArray(data.user.roles) 
-          ? data.user.roles 
+        const rawRoles = Array.isArray(data.user.roles)
+          ? data.user.roles
           : [data.user.roles];
-        
-        rolesArray = rawRoles.filter((role): role is UserRole => 
-          role === 'admin' || role === 'recepcion'
+
+        rolesArray = rawRoles.filter((role): role is UserRole =>
+          role === 'admin' || role === 'recepcion' || role === 'superadmin'
         );
       }
-                
-      setUser({
+
+      const authUser: AuthUser = {
         name: data.user.name,
         lastname: data.user.lastname,
         email: data.user.email,
@@ -73,10 +73,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         roles: rolesArray,
         gimnasio_id: data.user.gimnasio,
         gimnasio_name: data.user.gimnasio_name
-      });      
-      
+      };
+      setUser(authUser);
+      return authUser;
+
     } catch {
       setError('Datos de usuarios no encontrados');
+      return null;
     } finally {
       setLoading(false);
     }
@@ -95,7 +98,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setIsAuthenticated(false);
   }, []);
 
-  const login = async (credentials: LoginUserDto) => {
+  const login = async (credentials: LoginUserDto): Promise<AuthUser | null> => {
     setLoading(true);
     setError(null);
 
@@ -103,7 +106,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const accessToken = await loginApi(credentials);
       setAccessToken(accessToken);
       setIsAuthenticated(true);
-      await loadUser();      
+      const loadedUser = await loadUser();
+      return loadedUser;
     } catch (error) {
       setError('Usuario o contraseña incorrectos');
       throw error;            
