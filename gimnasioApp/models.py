@@ -51,12 +51,13 @@ class Usuario(AbstractBaseUser):
     avatar = models.ImageField(upload_to='fotos/', null=True, blank=True, default='')
     
     # FK a Gimnasio para multi-tenant
+    # null/blank=True para permitir superadmin SIN gimnasio asignado
     gimnasio = models.ForeignKey(
         Gimnasio,
         on_delete=models.CASCADE,
         related_name='usuarios',
-        null=False,
-        blank=False
+        null=True,
+        blank=True
     )
         
     OPCIONES_ROL = [

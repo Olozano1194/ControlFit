@@ -23,12 +23,24 @@ from datetime import datetime, date, timedelta
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 # Importar permisos personalizados
-from .permissions import IsAdminUser, IsRecepcionUser
+from .permissions import IsAdminUser, IsRecepcionUser, IsSuperAdmin
 from .mixins import MultiTenantViewSetMixin
 from .services.notifications import NotificationManager
 from decimal import Decimal
 from django.db.models import Sum
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
+
+
+# ============================================================
+# PLATFORM PAGINATION
+# ============================================================
+
+class PlatformPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+    page_query_param = 'page'
 
 
 # ============================================================
@@ -870,3 +882,166 @@ class DemoRequestViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         # Acá a futuro podés agregar lógica para mandarte un email automático
         serializer.save()
+
+
+# ============================================================
+# PLATFORM — SUPERADMIN VIEWS
+# ============================================================
+from .models import DemoRequest
+from .serializers import PlatformStatsSerializer, GimnasioPlatformSerializer, GimnasioPlatformDetailSerializer
+from django.db.models import Count, Q, Sum
+from datetime import date
+from decimal import Decimal
+
+
+class PlatformStatsView(APIView):
+    """Estadísticas globales de la plataforma (solo superadmin)."""
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def get(self, request):
+        today = date.today()
+        mes_actual = today.month
+        anio_actual = today.year
+
+        # Mes anterior
+        if mes_actual == 1:
+            prev_month = 12
+            prev_year = anio_actual - 1
+        else:
+            prev_month = mes_actual - 1
+            prev_year = anio_actual
+
+        # Total gyms
+        total_gimnasios = Gimnasio.objects.count()
+        gimnasios_activos = Gimnasio.objects.filter(is_active=True).count()
+
+        # Staff total (admin + recepcion + superadmin)
+        total_usuarios_staff = Usuario.objects.count()
+
+        # Demo requests
+        demo_pendientes = DemoRequest.objects.filter(estado='pendiente').count()
+        demo_contactados = DemoRequest.objects.filter(estado='contactado').count()
+
+        # Ingresos mes global = pagos + diarios (R5)
+        pagos_mes = PagoMembresia.objects.filter(
+            fecha_pago__month=mes_actual,
+            fecha_pago__year=anio_actual
+        ).aggregate(total=Sum('monto'))['total'] or Decimal('0')
+
+        diarios_mes = UsuarioGymDay.objects.filter(
+            dateInitial__month=mes_actual,
+            dateInitial__year=anio_actual
+        ).aggregate(total=Sum('price'))['total'] or Decimal('0')
+
+        ingresos_mes_global = pagos_mes + diarios_mes
+
+        # Miembros activos globales (hoy)
+        miembros_activos_global = MembresiaAsignada.objects.filter(
+            dateInitial__lte=today,
+            dateFinal__gte=today
+        ).values('miembro').distinct().count()
+
+        # Retención ponderada: SUM(activos_hoy) / SUM(activos_mes_anterior) * 100
+        # Miembros activos mes anterior
+        if prev_month == 12:
+            prev_month_end = date(prev_year + 1, 1, 1) - timedelta(days=1)
+        else:
+            prev_month_end = date(prev_year, prev_month + 1, 1) - timedelta(days=1)
+        prev_month_start = date(prev_year, prev_month, 1)
+
+        activos_hoy = MembresiaAsignada.objects.filter(
+            dateInitial__lte=today,
+            dateFinal__gte=today
+        ).values('miembro', 'miembro__gimnasio').distinct()
+
+        activos_mes_anterior = MembresiaAsignada.objects.filter(
+            dateInitial__lte=prev_month_end,
+            dateFinal__gte=prev_month_start
+        ).values('miembro', 'miembro__gimnasio').distinct()
+
+        # Agrupar por gimnasio para ponderar
+        from collections import defaultdict
+        activos_hoy_por_gym = defaultdict(int)
+        activos_anterior_por_gym = defaultdict(int)
+
+        for a in activos_hoy:
+            activos_hoy_por_gym[a['miembro__gimnasio']] += 1
+        for a in activos_mes_anterior:
+            activos_anterior_por_gym[a['miembro__gimnasio']] += 1
+
+        total_hoy = sum(activos_hoy_por_gym.values())
+        total_anterior = sum(activos_anterior_por_gym.values())
+
+        if total_anterior > 0:
+            retencion_promedio = Decimal(str(round((total_hoy / total_anterior) * 100, 1)))
+        else:
+            retencion_promedio = Decimal('100.0')
+
+        data = {
+            'total_gimnasios': total_gimnasios,
+            'gimnasios_activos': gimnasios_activos,
+            'total_usuarios_staff': total_usuarios_staff,
+            'demo_pendientes': demo_pendientes,
+            'demo_contactados': demo_contactados,
+            'ingresos_mes_global': ingresos_mes_global,
+            'miembros_activos_global': miembros_activos_global,
+            'retencion_promedio': retencion_promedio,
+        }
+        serializer = PlatformStatsSerializer(data)
+        return Response(serializer.data)
+
+
+class GimnasioPlatformViewSet(viewsets.ModelViewSet):
+    """CRUD de gimnasios para superadmin (sin filtro multi-tenant)."""
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    pagination_class = PlatformPagination
+    queryset = Gimnasio.objects.all().order_by('-created_at')
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    search_fields = ['name', 'address', 'phone']
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return GimnasioPlatformDetailSerializer
+        return GimnasioPlatformSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        
+        # Anotaciones para list
+        if self.action == 'list':
+            today = date.today()
+            mes_actual = today.month
+            anio_actual = today.year
+
+            qs = qs.annotate(
+                usuarios_count=Count(
+                    'usuarios',
+                    filter=Q(usuarios__is_active=True)
+                ),
+                miembros_activos_count=Count(
+                    'miembros__miembro',
+                    filter=Q(
+                        miembros__miembro__dateInitial__lte=today,
+                        miembros__miembro__dateFinal__gte=today
+                    ),
+                    distinct=True
+                ),
+                ingresos_mes=(
+                    Sum(
+                        'miembros__miembro__pagos__monto',
+                        filter=Q(
+                            miembros__miembro__pagos__fecha_pago__month=mes_actual,
+                            miembros__miembro__pagos__fecha_pago__year=anio_actual
+                        )
+                    ) or Decimal('0')
+                ) + (
+                    Sum(
+                        'miembros_diarios__price',
+                        filter=Q(
+                            miembros_diarios__dateInitial__month=mes_actual,
+                            miembros_diarios__dateInitial__year=anio_actual
+                        )
+                    ) or Decimal('0')
+                )
+            )
+        return qs

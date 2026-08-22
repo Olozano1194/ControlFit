@@ -2191,3 +2191,178 @@ class AuthSettingsTest(TestCase):
         """El helper lee settings.DEBUG directamente; el bloque AUTH_COOKIE_* vestigial se eliminó."""
         self.assertNotIn('AUTH_COOKIE', settings.SIMPLE_JWT)
         self.assertNotIn('AUTH_COOKIE_SAMESITE', settings.SIMPLE_JWT)
+
+
+# ============================================================
+# PLATFORM DASHBOARD — SUPERADMIN
+# ============================================================
+
+class PlatformDashboardTest(TestCase):
+    """Tests para el dashboard de plataforma (superadmin)."""
+
+    def setUp(self):
+        from gimnasioApp.models import Gimnasio, Usuario, UsuarioGym, Membresia, MembresiaAsignada, PagoMembresia, UsuarioGymDay, DemoRequest
+        from datetime import date, timedelta
+        from decimal import Decimal
+        from django.contrib.auth import get_user_model
+        from rest_framework.test import APIClient
+
+        User = get_user_model()
+
+        # Crear superadmin
+        self.superadmin = User.objects.create_user(
+            email='superadmin@test.com',
+            password='TestPass123',
+            name='Super',
+            lastname='Admin',
+            roles='superadmin',
+            gimnasio=None
+        )
+
+        # Crear gym admin normal
+        self.gym1 = Gimnasio.objects.create(name='Gym Alpha', address='Calle 1', phone='3001112233', is_active=True)
+        self.gym2 = Gimnasio.objects.create(name='Gym Beta', address='Calle 2', phone='3004445566', is_active=True)
+        self.gym3 = Gimnasio.objects.create(name='Gym Gamma', address='Calle 3', phone='3007778899', is_active=False)
+
+        # Admin de gym1
+        self.admin1 = User.objects.create_user(
+            email='admin1@test.com',
+            password='TestPass123',
+            name='Admin',
+            lastname='Uno',
+            roles='admin',
+            gimnasio=self.gym1
+        )
+
+        # Recepcionista de gym2
+        self.recep2 = User.objects.create_user(
+            email='recep2@test.com',
+            password='TestPass123',
+            name='Recep',
+            lastname='Dos',
+            roles='recepcion',
+            gimnasio=self.gym2
+        )
+
+        # Miembros y membresías para gym1
+        self.miembro1 = UsuarioGym.objects.create(
+            gimnasio=self.gym1, name='Juan', lastname='Perez', phone='3001111111', address='Dir 1'
+        )
+        self.membresia1 = Membresia.objects.create(
+            gimnasio=self.gym1, name='Mensual', price=Decimal('100000'), duration=30, max_multiplier=3
+        )
+        self.memb_asig1 = MembresiaAsignada.objects.create(
+            miembro=self.miembro1, membresia=self.membresia1, dateInitial=date.today() - timedelta(days=5),
+            multiplier=1, discount_percent=Decimal('0')
+        )
+
+        # Miembros y membresías para gym2
+        self.miembro2 = UsuarioGym.objects.create(
+            gimnasio=self.gym2, name='Maria', lastname='Gomez', phone='3002222222', address='Dir 2'
+        )
+        self.membresia2 = Membresia.objects.create(
+            gimnasio=self.gym2, name='Trimestral', price=Decimal('250000'), duration=90, max_multiplier=1
+        )
+        self.memb_asig2 = MembresiaAsignada.objects.create(
+            miembro=self.miembro2, membresia=self.membresia2, dateInitial=date.today() - timedelta(days=10),
+            multiplier=1, discount_percent=Decimal('0')
+        )
+
+        # Pagos (mes actual)
+        PagoMembresia.objects.create(
+            membresia_asignada=self.memb_asig1, monto=Decimal('50000'), metodo_pago='efectivo'
+        )
+        PagoMembresia.objects.create(
+            membresia_asignada=self.memb_asig2, monto=Decimal('250000'), metodo_pago='transferencia'
+        )
+
+        # Ingresos diarios (mes actual)
+        UsuarioGymDay.objects.create(
+            gimnasio=self.gym1, name='Pedro', lastname='Lopez', phone='3003333333',
+            dateInitial=date.today(), price=Decimal('20000')
+        )
+        UsuarioGymDay.objects.create(
+            gimnasio=self.gym2, name='Ana', lastname='Martinez', phone='3004444444',
+            dateInitial=date.today(), price=Decimal('15000')
+        )
+
+        # Demo requests
+        DemoRequest.objects.create(nombre='Demo1', email='demo1@test.com', telefono='3005555555', nombre_gimnasio='Demo Gym 1', estado='pendiente')
+        DemoRequest.objects.create(nombre='Demo2', email='demo2@test.com', telefono='3006666666', nombre_gimnasio='Demo Gym 2', estado='contactado')
+
+        # Login superadmin - usar APIClient
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.superadmin)
+
+    def test_superadmin_sees_all_gyms(self):
+        """Superadmin ve TODOS los gyms (3), admin de gym ve 403."""
+        response = self.client.get('/gym/api/v1/platform/gimnasios/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['count'], 3)
+
+        self.client.force_authenticate(user=self.admin1)
+        response = self.client.get('/gym/api/v1/platform/gimnasios/')
+        self.assertEqual(response.status_code, 403)
+
+        self.client.force_authenticate(user=self.recep2)
+        response = self.client.get('/gym/api/v1/platform/gimnasios/')
+        self.assertEqual(response.status_code, 403)
+
+    def test_stats_aggregation_correct(self):
+        """Stats: ingresos = pagos + diarios, retención ponderada."""
+        response = self.client.get('/gym/api/v1/platform/stats/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+
+        self.assertEqual(data['total_gimnasios'], 3)
+        self.assertEqual(data['gimnasios_activos'], 2)
+        self.assertEqual(data['total_usuarios_staff'], 3)
+        self.assertEqual(data['demo_pendientes'], 1)
+        self.assertEqual(data['demo_contactados'], 1)
+        self.assertEqual(data['ingresos_mes_global'], '335000.00')
+        self.assertEqual(data['miembros_activos_global'], 2)
+        self.assertEqual(data['retencion_promedio'], '100.0')
+
+    def test_pagination_default_20_max_100(self):
+        """Paginación: default 20, max 100."""
+        # Default
+        response = self.client.get('/gym/api/v1/platform/gimnasios/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('count', data)  # DRF pagination: count, next, previous, results
+        self.assertIn('results', data)
+        self.assertEqual(len(data['results']), 3)
+
+        # page_size=10 (menor a 20)
+        response = self.client.get('/gym/api/v1/platform/gimnasios/?page_size=10')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data['results']), 3)  # solo 3 gyms en test
+
+        # page_size=150 (mayor a max) → debe caer a 100
+        response = self.client.get('/gym/api/v1/platform/gimnasios/?page_size=150')
+        self.assertEqual(response.status_code, 200)
+
+    def test_toggle_is_active(self):
+        """PATCH /platform/gimnasios/{id}/ con is_active → actualiza."""
+        import json
+        response = self.client.patch(
+            f'/gym/api/v1/platform/gimnasios/{self.gym3.id}/',
+            json.dumps({'is_active': True}),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['is_active'])
+
+        from gimnasioApp.models import Gimnasio
+        gym3 = Gimnasio.objects.get(id=self.gym3.id)
+        self.assertTrue(gym3.is_active)
+
+        self.client.force_authenticate(user=self.admin1)
+        response = self.client.patch(
+            f'/gym/api/v1/platform/gimnasios/{self.gym3.id}/',
+            {'is_active': False},
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 403)

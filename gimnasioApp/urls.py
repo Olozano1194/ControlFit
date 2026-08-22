@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework import routers
-from .views import UserViewSet, userProfileView, UsuarioGymViewSet, UsuarioGymDayViewSet, Home, MembresiaViewSet, MembresiaAsignadaViewSet, PagoMembresiaViewSet, ActivitiesView, ExportReportView, RegisterViewSet, DashboardStatsView, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView, NotificationViewSet, CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView
+from .views import UserViewSet, userProfileView, UsuarioGymViewSet, UsuarioGymDayViewSet, Home, MembresiaViewSet, MembresiaAsignadaViewSet, PagoMembresiaViewSet, ActivitiesView, ExportReportView, RegisterViewSet, DashboardStatsView, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView, NotificationViewSet, CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView, PlatformStatsView, GimnasioPlatformViewSet
 
 #api versioning
 router = routers.DefaultRouter()
@@ -15,6 +15,7 @@ router.register(r'Notificaciones', NotificationViewSet, basename='Notificaciones
 
 from .views import DemoRequestViewSet
 router.register(r'solicitudes-demo', DemoRequestViewSet, basename='solicitudes-demo')
+router.register(r'platform/gimnasios', GimnasioPlatformViewSet, basename='gimnasios-platform')
 
 urlpatterns = [
     path('gym/api/v1/', include(router.urls)),      
@@ -29,6 +30,9 @@ urlpatterns = [
          name='pagos-list'),
     path('gym/api/v1/activities/', ActivitiesView.as_view(), name='activities'),
     path('gym/api/v1/export-report/', ExportReportView.as_view(), name='export-report'),
+    
+    # Platform endpoints (superadmin only)
+    path('gym/api/v1/platform/stats/', PlatformStatsView.as_view(), name='platform-stats'),
     
     # SimpleJWT endpoints (cookie-based: login/refresh/logout)
     path('gym/api/v1/token/', CookieTokenObtainPairView.as_view(), name='token_obtain_pair'),
