@@ -61,7 +61,7 @@ const CalendarioPage = () => {
     const isAdmin = user?.roles?.includes('admin') ?? false;
 
     const [eventos, setEventos] = useState<EventoCalendario[]>([]);
-    const [_tipos, setTipos] = useState<TipoEvento[]>([]);
+    const [, setTipos] = useState<TipoEvento[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
     const [isEventoFormOpen, setIsEventoFormOpen] = useState(false);
