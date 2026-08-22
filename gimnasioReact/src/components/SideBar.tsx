@@ -18,6 +18,7 @@ export interface SubMenuState {
     menu3: boolean;
     menu4: boolean;
     menu5: boolean;
+    menu6: boolean;
 }
 
 const SideBar = () => {
@@ -30,6 +31,7 @@ const SideBar = () => {
         menu3: false,
         menu4: false,
         menu5: false,
+        menu6: false,
     });
     const { user, logout } = useAuth();
 
