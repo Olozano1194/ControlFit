@@ -3,6 +3,7 @@ import {Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/useAuth';
 //Layouts
 import LayoutAdmin from './layouts/LayoutAdmin';
+import LayoutPlatform from './layouts/LayoutPlatform';
 //Pages auth
 import Login from './pages/auth/LoginPage';
 import Register from './pages/auth/RegisterPage';
@@ -29,6 +30,9 @@ import NotificationsPage from './pages/admin/notifications/NotificationsPage';
 import CalendarPage from './pages/admin/calendario/CalendarioPage';
 // Solicitudes Demo (plataforma)
 import DemoRequestsPage from './pages/admin/demo/DemoRequestsPage';
+import PlatformDashboardPage from './pages/admin/platform/PlatformDashboardPage';
+import GimnasiosPage from './pages/admin/platform/GimnasiosPage';
+import GimnasioDetailPage from './pages/admin/platform/GimnasioDetailPage';
 //Rutas protegidas
 import ProtectRoute from './routes/protectedRoute/ProtectRoute';
 import SuperAdminRoute from './routes/protectedRoute/SuperAdminRoute';
@@ -53,7 +57,12 @@ function App() {
 
       {/* Rutas de la plataforma — solo superadmin */}
       <Route element={<SuperAdminRoute />}>
-        <Route path="platform/solicitudes-demo" element={<DemoRequestsPage />} />
+        <Route path="platform" element={<LayoutPlatform />}>
+          <Route index element={<PlatformDashboardPage />} />
+          <Route path="solicitudes-demo" element={<DemoRequestsPage />} />
+          <Route path="gimnasios" element={<GimnasiosPage />} />
+          <Route path="gimnasios/:id" element={<GimnasioDetailPage />} />
+        </Route>
       </Route>
 
       {/* Rutas protegidas del gimnasio */}
