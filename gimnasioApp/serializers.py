@@ -420,11 +420,21 @@ class NotificationSerializer(serializers.ModelSerializer):
 # ============================================================
 from .models import DemoRequest
 
+class GimnasioCreadoSerializer(serializers.ModelSerializer):
+    """Serializer anidado para gym_creado en DemoRequest (read_only)."""
+    class Meta:
+        model = Gimnasio
+        fields = ['id', 'name']
+        read_only_fields = ['id', 'name']
+
+
 class DemoRequestSerializer(serializers.ModelSerializer):
+    gym_creado = GimnasioCreadoSerializer(read_only=True)
+    
     class Meta:
         model = DemoRequest
         fields = '__all__'
-        read_only_fields = ('id', 'fecha_solicitud')
+        read_only_fields = ('id', 'fecha_solicitud', 'gym_creado')
 
 
 # ============================================================

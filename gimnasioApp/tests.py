@@ -2366,3 +2366,107 @@ class PlatformDashboardTest(TestCase):
             content_type='application/json'
         )
         self.assertEqual(response.status_code, 403)
+
+
+# ============================================================
+# AUTO-CREAR GYM DESDE DEMO — Phase 1 Foundation Tests
+# ============================================================
+
+class AutoCrearGymDesdeDemoPhase1Test(TestCase):
+    """Tests para la fase 1: Foundation - modelos y serializers."""
+
+    def setUp(self):
+        from gimnasioApp.models import Gimnasio, Usuario, DemoRequest
+        self.gym = Gimnasio.objects.create(name="Test Gym", address="Calle 123", phone="3001112233")
+        
+    def test_demo_request_gym_creado_fk_nullable(self):
+        """DemoRequest tiene FK gym_creado nullable con SET_NULL y related_name=demo_origen."""
+        from gimnasioApp.models import DemoRequest, Gimnasio
+        
+        # Crear DemoRequest sin gym_creado (debe ser nullable)
+        demo = DemoRequest.objects.create(
+            nombre='Test Demo',
+            email='test@demo.com',
+            telefono='3005555555',
+            nombre_gimnasio='Demo Gym Test'
+        )
+        self.assertIsNone(demo.gym_creado)
+        
+        # Asociar un gimnasio
+        demo.gym_creado = self.gym
+        demo.save()
+        self.assertEqual(demo.gym_creado, self.gym)
+        
+        # Verificar related_name funciona (reverse relation)
+        self.assertIn(demo, self.gym.demo_origen.all())
+        
+        # Verificar SET_NULL al borrar el gimnasio
+        gym_id = self.gym.id
+        self.gym.delete()
+        demo.refresh_from_db()
+        self.assertIsNone(demo.gym_creado)
+
+    def test_usuario_must_change_password_default_false(self):
+        """Usuario tiene campo must_change_password BooleanField(default=False)."""
+        from gimnasioApp.models import Usuario
+        
+        user = Usuario.objects.create_user(
+            email='test@user.com',
+            password='password123',
+            name='Test',
+            lastname='User',
+            gimnasio=self.gym
+        )
+        
+        # El campo debe existir y ser False por defecto
+        self.assertFalse(user.must_change_password)
+        
+        # Podemos establecerlo a True
+        user.must_change_password = True
+        user.save()
+        user.refresh_from_db()
+        self.assertTrue(user.must_change_password)
+
+    def test_demo_request_serializer_includes_gym_creado_nested(self):
+        """DemoRequestSerializer incluye gym_creado anidado (read_only) con id y name."""
+        from gimnasioApp.serializers import DemoRequestSerializer
+        from gimnasioApp.models import DemoRequest
+        
+        # DemoRequest sin gym_creado
+        demo = DemoRequest.objects.create(
+            nombre='Serializer Test',
+            email='serializer@test.com',
+            telefono='3001111111',
+            nombre_gimnasio='Serializer Gym'
+        )
+        serializer = DemoRequestSerializer(demo)
+        data = serializer.data
+        
+        # gym_creado debe estar presente y ser None
+        self.assertIn('gym_creado', data)
+        self.assertIsNone(data['gym_creado'])
+        
+        # DemoRequest con gym_creado
+        demo.gym_creado = self.gym
+        demo.save()
+        serializer = DemoRequestSerializer(demo)
+        data = serializer.data
+        
+        # gym_creado debe ser objeto con id y name
+        self.assertIsNotNone(data['gym_creado'])
+        self.assertEqual(data['gym_creado']['id'], self.gym.id)
+        self.assertEqual(data['gym_creado']['name'], self.gym.name)
+        
+        # gym_creado debe ser read_only (no se puede escribir via serializer)
+        # Intentar crear con gym_creado en data debe ignorarlo o fallar
+        create_data = {
+            'nombre': 'New Demo',
+            'email': 'new@demo.com',
+            'telefono': '3002222222',
+            'nombre_gimnasio': 'New Gym',
+            'gym_creado': {'id': self.gym.id, 'name': 'Hacker Gym'}  # Intentar inyectar
+        }
+        create_serializer = DemoRequestSerializer(data=create_data)
+        self.assertTrue(create_serializer.is_valid())
+        # gym_creado no debe estar en validated_data porque es read_only
+        self.assertNotIn('gym_creado', create_serializer.validated_data)
