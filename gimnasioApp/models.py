@@ -69,6 +69,8 @@ class Usuario(AbstractBaseUser):
     #password = models.CharField(max_length=300)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Campo para forzar cambio de contraseña en primer login
+    must_change_password = models.BooleanField(default=False)
 
     #Usamos el UserManager personalizado
     objects = UserManager()
@@ -407,6 +409,14 @@ class DemoRequest(models.Model):
     nombre_gimnasio = models.CharField(max_length=150)
     estado = models.CharField(max_length=20, choices=ESTADOS, default='pendiente')
     fecha_solicitud = models.DateTimeField(auto_now_add=True)
+    # FK al gimnasio creado desde esta demo (nullable, SET_NULL al borrar gimnasio)
+    gym_creado = models.ForeignKey(
+        Gimnasio,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='demo_origen'
+    )
 
     class Meta:
         db_table = 'demo_request'
