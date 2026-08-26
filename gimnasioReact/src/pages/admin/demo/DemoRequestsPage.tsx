@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { toast } from "react-hot-toast";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 // API
 import { getDemoRequests, updateDemoRequestEstado, type DemoRequest } from "../../../api/action/demoRequests.api";
 // Table
@@ -12,7 +13,17 @@ import { IoSearch } from "react-icons/io5";
 import { MdFitnessCenter } from "react-icons/md";
 
 // Badge de estado con toggle al hacer click
-const EstadoBadge = ({ id, estado, onToggle }: { id: number; estado: DemoRequest['estado']; onToggle: (id: number, estado: DemoRequest['estado']) => void }) => {
+const EstadoBadge = ({
+    id,
+    estado,
+    onToggle,
+    isLoading,
+}: {
+    id: number;
+    estado: DemoRequest['estado'];
+    onToggle: (id: number, estado: DemoRequest['estado']) => void;
+    isLoading: boolean;
+}) => {
     const config = {
         pendiente: { label: 'Pendiente', class: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' },
         contactado: { label: 'Contactado', class: 'bg-green-100 text-green-700 hover:bg-green-200' },
@@ -21,11 +32,22 @@ const EstadoBadge = ({ id, estado, onToggle }: { id: number; estado: DemoRequest
     return (
         <button
             type="button"
-            onClick={() => onToggle(id, estado)}
-            className={`inline-block px-3 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer ${c.class}`}
-            title="Click para cambiar estado"
+            onClick={() => !isLoading && onToggle(id, estado)}
+            disabled={isLoading}
+            className={`inline-block px-3 py-1 rounded-full text-xs font-semibold transition-colors ${isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${c.class}`}
+            title={isLoading ? "Actualizando..." : "Click para cambiar estado"}
         >
-            {c.label}
+            {isLoading ? (
+                <span className="flex items-center gap-1">
+                    <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Cargando...</span>
+                </span>
+            ) : (
+                c.label
+            )}
         </button>
     );
 };
@@ -35,6 +57,8 @@ const DemoRequestsPage = () => {
     const [filtered, setFiltered] = useState<DemoRequest[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [search, setSearch] = useState('');
+    const queryClient = useQueryClient();
+    const [loadingIds, setLoadingIds] = useState<Set<number>>(new Set());
 
     useEffect(() => {
         const fetchData = async () => {
@@ -65,16 +89,64 @@ const DemoRequestsPage = () => {
         );
     };
 
-    const handleToggleEstado = async (id: number, estadoActual: DemoRequest['estado']) => {
+    const { mutate: toggleEstado } = useMutation({
+        mutationFn: ({ id, estado }: { id: number; estado: 'pendiente' | 'contactado' }) =>
+            updateDemoRequestEstado(id, estado),
+        onMutate: async ({ id }) => {
+            // Optimistic UI: loading state en badge
+            setLoadingIds(prev => new Set(prev).add(id));
+        },
+        onSuccess: (updatedDemo, { id, estado }) => {
+            setLoadingIds(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+
+            queryClient.invalidateQueries({ queryKey: ['demoRequests'] });
+
+            // Toast inteligente según transición
+            if (estado === 'contactado' && updatedDemo.gym_creado) {
+                // pendiente → contactado + gym creado
+                toast.success(
+                    `¡Gimnasio creado! 🎉 Credenciales enviadas a ${updatedDemo.email}. El admin recibirá su contraseña temporal por email.`,
+                    { duration: 6000 }
+                );
+            } else if (estado === 'pendiente' && updatedDemo.gym_creado === null) {
+                // contactado → pendiente (reverso con cleanup)
+                toast(
+                    'Revertido a pendiente. El gimnasio asociado ha sido desactivado. Puede contactar nuevamente al lead.',
+                    { icon: '↩️', duration: 5000 }
+                );
+            } else {
+                // Cambio simple sin gym creado (idempotente)
+                toast.success(`Estado actualizado: la solicitud ahora está ${estado === 'contactado' ? 'contactada' : 'pendiente'}.`);
+            }
+        },
+        onError: (error: any, { id, estado }) => {
+            setLoadingIds(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+
+            const response = error?.response?.data;
+
+            // Error específico: email duplicado
+            if (response?.email && Array.isArray(response.email)) {
+                toast.error(response.email[0] || 'Este email ya está registrado. Usá otro email o contactá a soporte.', { duration: 6000 });
+                return;
+            }
+
+            // Error genérico
+            toast.error(response?.detail || error.message || 'No se pudo cambiar el estado');
+        },
+    });
+
+    const handleToggleEstado = (id: number, estadoActual: DemoRequest['estado']) => {
+        if (loadingIds.has(id)) return; // Prevenir double-click
         const nuevoEstado = estadoActual === 'pendiente' ? 'contactado' : 'pendiente';
-        try {
-            const updated = await updateDemoRequestEstado(id, nuevoEstado);
-            setRequests(prev => prev.map(r => r.id === id ? updated : r));
-            setFiltered(prev => prev.map(r => r.id === id ? updated : r));
-            toast.success(`Marcado como ${nuevoEstado}`);
-        } catch {
-            toast.error('No se pudo actualizar el estado');
-        }
+        toggleEstado({ id, estado: nuevoEstado });
     };
 
     const columnHelper = createColumnHelper<DemoRequest>();
@@ -127,6 +199,7 @@ const DemoRequestsPage = () => {
                     id={info.row.original.id}
                     estado={info.getValue()}
                     onToggle={handleToggleEstado}
+                    isLoading={loadingIds.has(info.row.original.id)}
                 />
             ),
         }),
@@ -183,5 +256,4 @@ const DemoRequestsPage = () => {
         </main>
     );
 };
-
 export default DemoRequestsPage;
