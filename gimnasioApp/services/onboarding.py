@@ -16,8 +16,9 @@ def provision_gym_from_demo(demo_request) -> tuple:
     """
     Crea Gimnasio + Usuario(admin) + link demo.
     Retorna (gym, admin_user, temp_password).
-    Lanza ValidationError si email ya existe.
+    Lanza ValidationError si email ya existe en OTRO gym activo.
     Idempotente: si demo ya tiene gym_creado, reactiva si estaba inactivo.
+    Si email existe pero es usuario inactivo de este gym, reactiva todo.
     """
     from ..models import Gimnasio, Usuario, DemoRequest
     
@@ -34,29 +35,63 @@ def provision_gym_from_demo(demo_request) -> tuple:
             Usuario.objects.filter(gimnasio=gym, roles='admin').update(is_active=True)
         
         admin_user = Usuario.objects.filter(gimnasio=gym, roles='admin').first()
-        # No tenemos el password original, generar uno nuevo (no usado en idempotencia)
         temp_password = generate_temp_password()
         return gym, admin_user, temp_password
     
-    # 1. Validar email único
-    if Usuario.objects.filter(email=demo_request.email).exists():
-        raise ValidationError("Este email ya está registrado. Usá otro email o contactá a soporte.")
+    # 1. Verificar email existente
+    existing_user = Usuario.objects.filter(email=demo_request.email).first()
     
-    # 2. Crear Gimnasio
+    if existing_user:
+        # Si el usuario existe pero está INACTIVO y no tiene gimnasio (o gym inactivo)
+        # Permitimos reactivarlo creando/usando el gym de la demo
+        if not existing_user.is_active:
+            # Verificar si tiene gimnasio asignado
+            if existing_user.gimnasio and not existing_user.gimnasio.is_active:
+                # Reactivar gym del usuario
+                gym = existing_user.gimnasio
+                gym.is_active = True
+                gym.save(update_fields=['is_active'])
+            else:
+                # Crear gym nuevo
+                gym = Gimnasio.objects.create(
+                    name=demo_request.nombre_gimnasio,
+                    phone=demo_request.telefono[:20],
+                    address='',
+                )
+            
+            # Reactivar usuario
+            temp_password = generate_temp_password()
+            existing_user.is_active = True
+            existing_user.gimnasio = gym
+            existing_user.roles = 'admin'
+            existing_user.name = 'Admin'
+            existing_user.lastname = demo_request.nombre_gimnasio[:50]
+            existing_user.set_password(temp_password)
+            existing_user.must_change_password = True
+            existing_user.save()
+            
+            # Link demo -> gym
+            demo_request.gym_creado = gym
+            demo_request.save(update_fields=['gym_creado'])
+            
+            return gym, existing_user, temp_password
+        else:
+            # Usuario ACTIVO en otro lado -> error
+            raise ValidationError("Este email ya está registrado. Usá otro email o contactá a soporte.")
+    
+    # 2. Email nuevo -> crear gym + usuario normalmente
     gym = Gimnasio.objects.create(
         name=demo_request.nombre_gimnasio,
-        phone=demo_request.telefono[:20],  # truncar a 20
-        address='',  # vacío por ahora
+        phone=demo_request.telefono[:20],
+        address='',
     )
     
-    # 3. Password temporal
     temp_password = generate_temp_password()
     
-    # 4. Crear Usuario admin
     admin_user = Usuario.objects.create(
         email=demo_request.email,
         name='Admin',
-        lastname=demo_request.nombre_gimnasio[:50],  # truncar a 50
+        lastname=demo_request.nombre_gimnasio[:50],
         roles='admin',
         gimnasio=gym,
         password=make_password(temp_password),
@@ -64,7 +99,6 @@ def provision_gym_from_demo(demo_request) -> tuple:
         is_active=True,
     )
     
-    # 5. Link demo -> gym
     demo_request.gym_creado = gym
     demo_request.save(update_fields=['gym_creado'])
     
