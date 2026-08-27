@@ -17,13 +17,22 @@ def provision_gym_from_demo(demo_request) -> tuple:
     Crea Gimnasio + Usuario(admin) + link demo.
     Retorna (gym, admin_user, temp_password).
     Lanza ValidationError si email ya existe.
-    Idempotente: si demo ya tiene gym_creado, retorna el existente.
+    Idempotente: si demo ya tiene gym_creado, reactiva si estaba inactivo.
     """
     from ..models import Gimnasio, Usuario, DemoRequest
     
-    # Idempotencia: si ya tiene gym_creado, retornar el existente
+    # Idempotencia: si ya tiene gym_creado
     if demo_request.gym_creado:
         gym = demo_request.gym_creado
+        
+        # Si el gym estaba soft-deleted, reactivarlo
+        if not gym.is_active:
+            gym.is_active = True
+            gym.save(update_fields=['is_active'])
+            
+            # Reactivar admin user(s)
+            Usuario.objects.filter(gimnasio=gym, roles='admin').update(is_active=True)
+        
         admin_user = Usuario.objects.filter(gimnasio=gym, roles='admin').first()
         # No tenemos el password original, generar uno nuevo (no usado en idempotencia)
         temp_password = generate_temp_password()
@@ -66,18 +75,22 @@ def provision_gym_from_demo(demo_request) -> tuple:
 def revert_gym_from_demo(demo_request) -> None:
     """
     Soft-delete: gym.is_active=False, admin.is_active=False, demo.gym_creado=None.
+    Idempotente: si ya no tiene gym_creado, no hace nada.
     """
     from ..models import Usuario
     
-    if demo_request.gym_creado:
-        gym = demo_request.gym_creado
-        # Soft-delete gym
-        gym.is_active = False
-        gym.save(update_fields=['is_active'])
-        
-        # Soft-delete admin user(s) of this gym
-        Usuario.objects.filter(gimnasio=gym, roles='admin').update(is_active=False)
-        
-        # Unlink demo
-        demo_request.gym_creado = None
-        demo_request.save(update_fields=['gym_creado'])
+    if not demo_request.gym_creado:
+        return  # Ya revertido, idempotente
+    
+    gym = demo_request.gym_creado
+    
+    # Soft-delete gym
+    gym.is_active = False
+    gym.save(update_fields=['is_active'])
+    
+    # Soft-delete admin user(s) of this gym
+    Usuario.objects.filter(gimnasio=gym, roles='admin').update(is_active=False)
+    
+    # Unlink demo
+    demo_request.gym_creado = None
+    demo_request.save(update_fields=['gym_creado'])

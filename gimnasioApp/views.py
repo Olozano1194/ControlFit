@@ -1073,7 +1073,11 @@ class PlatformStatsView(APIView):
 
 
 class GimnasioPlatformViewSet(viewsets.ModelViewSet):
-    """CRUD de gimnasios para superadmin (sin filtro multi-tenant)."""
+    """CRUD de gimnasios para superadmin (sin filtro multi-tenant).
+    
+    List: solo gimnasios activos (is_active=True)
+    Retrieve/Update/Delete: permite acceder a cualquier gym por ID
+    """
     permission_classes = [IsAuthenticated, IsSuperAdmin, RequirePasswordChange]
     pagination_class = PlatformPagination
     queryset = Gimnasio.objects.all().order_by('-created_at')
@@ -1088,8 +1092,10 @@ class GimnasioPlatformViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         
-        # Anotaciones para list
+        # LIST: solo gimnasios activos
         if self.action == 'list':
+            qs = qs.filter(is_active=True)
+            
             today = date.today()
             mes_actual = today.month
             anio_actual = today.year
@@ -1125,4 +1131,5 @@ class GimnasioPlatformViewSet(viewsets.ModelViewSet):
                     ) or Decimal('0')
                 )
             )
+        # RETRIEVE/UPDATE/DELETE: todos los gyms (incluye inactivos para poder reactivarlos)
         return qs

@@ -2294,12 +2294,12 @@ class PlatformDashboardTest(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(user=self.superadmin)
 
-    def test_superadmin_sees_all_gyms(self):
-        """Superadmin ve TODOS los gyms (3), admin de gym ve 403."""
+    def test_superadmin_sees_active_gyms_in_list(self):
+        """Superadmin ve solo gyms activos (2) en listado, admin de gym ve 403."""
         response = self.client.get('/gym/api/v1/platform/gimnasios/')
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(data['count'], 3)
+        self.assertEqual(data['count'], 2)  # Solo gym1 y gym2 (activos)
 
         self.client.force_authenticate(user=self.admin1)
         response = self.client.get('/gym/api/v1/platform/gimnasios/')
@@ -2332,13 +2332,13 @@ class PlatformDashboardTest(TestCase):
         data = response.json()
         self.assertIn('count', data)  # DRF pagination: count, next, previous, results
         self.assertIn('results', data)
-        self.assertEqual(len(data['results']), 3)
+        self.assertEqual(len(data['results']), 2)  # Solo 2 gyms activos en test
 
         # page_size=10 (menor a 20)
         response = self.client.get('/gym/api/v1/platform/gimnasios/?page_size=10')
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(len(data['results']), 3)  # solo 3 gyms en test
+        self.assertEqual(len(data['results']), 2)  # solo 2 gyms activos en test
 
         # page_size=150 (mayor a max) → debe caer a 100
         response = self.client.get('/gym/api/v1/platform/gimnasios/?page_size=150')
