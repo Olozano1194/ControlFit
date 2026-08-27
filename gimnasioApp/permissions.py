@@ -68,7 +68,7 @@ class RequirePasswordChange(BasePermission):
     Permiso que bloquea el acceso a vistas protegidas si el usuario 
     tiene must_change_password=True.
     
-    Excluye los endpoints de cambio de password y logout.
+    Excluye: /me/ (profile), /auth/password/change/, /auth/logout/
     """
     message = 'Debes cambiar tu contraseña temporal antes de continuar.'
     
@@ -78,10 +78,22 @@ class RequirePasswordChange(BasePermission):
         
         # Si el usuario debe cambiar password, bloquear acceso a vistas no excluidas
         if getattr(request.user, 'must_change_password', False):
-            # Permitir acceso a endpoints excluidos
+            # Endpoints permitidos aunque deba cambiar password
+            excluded_paths = [
+                '/auth/password/change/',
+                '/auth/logout/',
+                '/me/',  # Profile endpoint - necesita ser accesible para leer el flag
+            ]
             excluded_basenames = ['password-change', 'logout']
+            
+            # Check basename (ViewSets)
             if hasattr(view, 'basename') and view.basename in excluded_basenames:
                 return True
+            
+            # Check request path (APIViews)
+            if any(request.path.endswith(path) or request.path.endswith(path + '/') for path in excluded_paths):
+                return True
+                
             return False
         
         return True
