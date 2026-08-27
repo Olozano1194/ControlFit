@@ -61,3 +61,27 @@ class IsSuperAdmin(BasePermission):
             and request.user.is_authenticated 
             and request.user.roles == 'superadmin'
         )
+
+
+class RequirePasswordChange(BasePermission):
+    """
+    Permiso que bloquea el acceso a vistas protegidas si el usuario 
+    tiene must_change_password=True.
+    
+    Excluye los endpoints de cambio de password y logout.
+    """
+    message = 'Debes cambiar tu contraseña temporal antes de continuar.'
+    
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+        
+        # Si el usuario debe cambiar password, bloquear acceso a vistas no excluidas
+        if getattr(request.user, 'must_change_password', False):
+            # Permitir acceso a endpoints excluidos
+            excluded_basenames = ['password-change', 'logout']
+            if hasattr(view, 'basename') and view.basename in excluded_basenames:
+                return True
+            return False
+        
+        return True

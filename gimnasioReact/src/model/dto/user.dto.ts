@@ -35,5 +35,6 @@ export interface AuthUser {
     avatar?: string;
     roles?: UserRole[];
     gimnasio_id?: number;
-    gimnasio_name?: string;    
+    gimnasio_name?: string;
+    must_change_password?: boolean;    
 }
