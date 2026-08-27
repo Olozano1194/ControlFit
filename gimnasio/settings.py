@@ -33,7 +33,7 @@ SECRET_KEY = os.environ['SECRET_KEY']
 DEBUG = 'RENDER' not in os.environ
 
 # In production (e.g., Render), set ALLOWED_HOSTS via environment variable
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver').split(',')
 
 # Esto lo colocamos para cuando vamos a poner en producción nuestro proyecto
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
