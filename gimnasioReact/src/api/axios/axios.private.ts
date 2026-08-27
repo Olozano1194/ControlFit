@@ -83,7 +83,16 @@ axiosPrivate.interceptors.request.use(
 // Response interceptor: manejar 401 y auto-refresh
 axiosPrivate.interceptors.response.use(
   (response: AxiosResponse) => response,
-  async (error: AxiosError) => {
+  async (error: AxiosError<{ code?: string }>) => {
+    // Handle PASSWORD_CHANGE_REQUIRED (403 with code)
+    if (error.response?.status === 403 && error.response?.data?.code === 'PASSWORD_CHANGE_REQUIRED') {
+      // Solo redirect si no estamos ya en la página de cambio
+      if (!window.location.pathname.includes('/cambiar-password')) {
+        window.location.href = '/cambiar-password/';
+      }
+      return Promise.reject(error);
+    }
+
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
     // Si el error no es 401 o ya se intentó retry, rechazar

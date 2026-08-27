@@ -1,0 +1,12 @@
+archive-report:
+  verdict: pass
+  critical_findings: 0
+  requirements: 18/18
+  scenarios: 22/22
+  tasks: 23/23
+  mode: hybrid
+  review_lineage:
+    proposal: sdd/auto-crear-gym-desde-demo/proposal
+    design: sdd/auto-crear-gym-design
+    tasks: sdd/auto-crear-gym-desde-demo/tasks
+    verify-report: sdd/auto-crear-gym-desde-demo/verify-report

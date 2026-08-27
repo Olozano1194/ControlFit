@@ -72,8 +72,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         avatar: avatarUrl,
         roles: rolesArray,
         gimnasio_id: data.user.gimnasio,
-        gimnasio_name: data.user.gimnasio_name
+        gimnasio_name: data.user.gimnasio_name,
+        must_change_password: data.user.must_change_password
       };
+      
+      // Si must_change_password y NO estamos en /cambiar-password/ → redirect
+      if (authUser.must_change_password && !window.location.pathname.includes('/cambiar-password')) {
+        window.location.href = '/cambiar-password/';
+        return null;
+      }
+      
       setUser(authUser);
       return authUser;
 

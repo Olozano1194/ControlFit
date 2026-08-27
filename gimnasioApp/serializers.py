@@ -5,9 +5,6 @@ from .models import Gimnasio, Usuario, UsuarioGym, UsuarioGymDay, Membresia, Mem
 from datetime import timedelta, date
 from decimal import Decimal
 
-#token
-from rest_framework.authtoken.models import Token
-
 
 # ============================================================
 # GIMNASIO SERIALIZER
@@ -32,8 +29,8 @@ class UsuarioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Usuario
         fields = ['id', 'email', 'name', 'lastname', 'roles', 'gimnasio', 'gimnasio_name',
-                  'avatar', 'is_active', 'created_at', 'password']
-        read_only_fields = ('id', 'created_at', 'is_active', 'gimnasio', 'gimnasio_name')
+                  'avatar', 'is_active', 'created_at', 'password', 'must_change_password']
+        read_only_fields = ('id', 'created_at', 'is_active', 'gimnasio', 'gimnasio_name', 'must_change_password')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -420,11 +417,28 @@ class NotificationSerializer(serializers.ModelSerializer):
 # ============================================================
 from .models import DemoRequest
 
+class GimnasioCreadoSerializer(serializers.ModelSerializer):
+    """Serializer anidado para gym_creado en DemoRequest (read_only)."""
+    class Meta:
+        model = Gimnasio
+        fields = ['id', 'name']
+        read_only_fields = ['id', 'name']
+
+
 class DemoRequestSerializer(serializers.ModelSerializer):
+    gym_creado = GimnasioCreadoSerializer(read_only=True)
+    email_sent = serializers.SerializerMethodField()
+    
     class Meta:
         model = DemoRequest
         fields = '__all__'
-        read_only_fields = ('id', 'fecha_solicitud')
+        read_only_fields = ('id', 'fecha_solicitud', 'gym_creado')
+    
+    def get_email_sent(self, obj):
+        # True si el gym fue creado y el email se intentó enviar
+        # Como es fire-and-forget, no podemos garantizar entrega
+        # Retornamos True si gym_creado existe (email fue disparado)
+        return obj.gym_creado is not None
 
 
 # ============================================================
@@ -487,3 +501,22 @@ class GimnasioPlatformDetailSerializer(GimnasioPlatformSerializer):
 
     class Meta(GimnasioPlatformSerializer.Meta):
         fields = GimnasioPlatformSerializer.Meta.fields + ['usuarios', 'miembros_activos', 'ultimos_pagos']
+
+
+# ============================================================
+# PASSWORD CHANGE SERIALIZER
+# ============================================================
+
+class PasswordChangeSerializer(serializers.Serializer):
+    """Serializer for password change endpoint.
+    
+    Validates old_password, new_password, and confirm_password.
+    """
+    old_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True)
+    
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['confirm_password']:
+            raise serializers.ValidationError({'confirm_password': 'Las contraseñas no coinciden.'})
+        return attrs

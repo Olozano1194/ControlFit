@@ -1,7 +1,7 @@
 import io
 import base64
 import json
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from django.test import RequestFactory
 from django.contrib.auth.models import AnonymousUser
 from django.db import IntegrityError
@@ -13,11 +13,11 @@ from unittest.mock import patch, MagicMock, call
 from decimal import Decimal
 from datetime import datetime, timedelta, date, timezone as dt_timezone
 from django.utils import timezone
-from .models import Gimnasio, Usuario, UsuarioGym, Membresia, MembresiaAsignada, PagoMembresia, TipoEvento, EventoCalendario, Notification
+from .models import Gimnasio, Usuario, UsuarioGym, Membresia, MembresiaAsignada, PagoMembresia, TipoEvento, EventoCalendario, Notification, DemoRequest
 from .middleware import GimnasioMiddleware
 from .mixins import MultiTenantViewSetMixin
-from .serializers import UsuarioSerializer, UsuarioGymSerializer, MembresiasSerializer, MembresiaAsignadaSerializer, PagoMembresiaSerializer, EventoCalendarioSerializer
-from .views import UserViewSet, UsuarioGymViewSet, MembresiaViewSet, Home, PagoMembresiaViewSet, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView, NotificationViewSet
+from .serializers import UsuarioSerializer, UsuarioGymSerializer, MembresiasSerializer, MembresiaAsignadaSerializer, PagoMembresiaSerializer, EventoCalendarioSerializer, DemoRequestSerializer
+from .views import UserViewSet, UsuarioGymViewSet, MembresiaViewSet, Home, PagoMembresiaViewSet, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView, NotificationViewSet, DemoRequestViewSet
 from .services.notifications import NotificationManager
 from .storage import SupabaseMediaStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -2294,12 +2294,12 @@ class PlatformDashboardTest(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(user=self.superadmin)
 
-    def test_superadmin_sees_all_gyms(self):
-        """Superadmin ve TODOS los gyms (3), admin de gym ve 403."""
+    def test_superadmin_sees_active_gyms_in_list(self):
+        """Superadmin ve solo gyms activos (2) en listado, admin de gym ve 403."""
         response = self.client.get('/gym/api/v1/platform/gimnasios/')
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(data['count'], 3)
+        self.assertEqual(data['count'], 2)  # Solo gym1 y gym2 (activos)
 
         self.client.force_authenticate(user=self.admin1)
         response = self.client.get('/gym/api/v1/platform/gimnasios/')
@@ -2332,13 +2332,13 @@ class PlatformDashboardTest(TestCase):
         data = response.json()
         self.assertIn('count', data)  # DRF pagination: count, next, previous, results
         self.assertIn('results', data)
-        self.assertEqual(len(data['results']), 3)
+        self.assertEqual(len(data['results']), 2)  # Solo 2 gyms activos en test
 
         # page_size=10 (menor a 20)
         response = self.client.get('/gym/api/v1/platform/gimnasios/?page_size=10')
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(len(data['results']), 3)  # solo 3 gyms en test
+        self.assertEqual(len(data['results']), 2)  # solo 2 gyms activos en test
 
         # page_size=150 (mayor a max) → debe caer a 100
         response = self.client.get('/gym/api/v1/platform/gimnasios/?page_size=150')
@@ -2366,3 +2366,1015 @@ class PlatformDashboardTest(TestCase):
             content_type='application/json'
         )
         self.assertEqual(response.status_code, 403)
+
+
+# ============================================================
+# AUTO-CREAR GYM DESDE DEMO — Phase 1 Foundation Tests
+# ============================================================
+
+class AutoCrearGymDesdeDemoPhase1Test(TestCase):
+    """Tests para la fase 1: Foundation - modelos y serializers."""
+
+    def setUp(self):
+        from gimnasioApp.models import Gimnasio, Usuario, DemoRequest
+        self.gym = Gimnasio.objects.create(name="Test Gym", address="Calle 123", phone="3001112233")
+        
+    def test_demo_request_gym_creado_fk_nullable(self):
+        """DemoRequest tiene FK gym_creado nullable con SET_NULL y related_name=demo_origen."""
+        from gimnasioApp.models import DemoRequest, Gimnasio
+        
+        # Crear DemoRequest sin gym_creado (debe ser nullable)
+        demo = DemoRequest.objects.create(
+            nombre='Test Demo',
+            email='test@demo.com',
+            telefono='3005555555',
+            nombre_gimnasio='Demo Gym Test'
+        )
+        self.assertIsNone(demo.gym_creado)
+        
+        # Asociar un gimnasio
+        demo.gym_creado = self.gym
+        demo.save()
+        self.assertEqual(demo.gym_creado, self.gym)
+        
+        # Verificar related_name funciona (reverse relation)
+        self.assertIn(demo, self.gym.demo_origen.all())
+        
+        # Verificar SET_NULL al borrar el gimnasio
+        gym_id = self.gym.id
+        self.gym.delete()
+        demo.refresh_from_db()
+        self.assertIsNone(demo.gym_creado)
+
+    def test_usuario_must_change_password_default_false(self):
+        """Usuario tiene campo must_change_password BooleanField(default=False)."""
+        from gimnasioApp.models import Usuario
+        
+        user = Usuario.objects.create_user(
+            email='test@user.com',
+            password='password123',
+            name='Test',
+            lastname='User',
+            gimnasio=self.gym
+        )
+        
+        # El campo debe existir y ser False por defecto
+        self.assertFalse(user.must_change_password)
+        
+        # Podemos establecerlo a True
+        user.must_change_password = True
+        user.save()
+        user.refresh_from_db()
+        self.assertTrue(user.must_change_password)
+
+    def test_demo_request_serializer_includes_gym_creado_nested(self):
+        """DemoRequestSerializer incluye gym_creado anidado (read_only) con id y name."""
+        from gimnasioApp.serializers import DemoRequestSerializer
+        from gimnasioApp.models import DemoRequest
+        
+        # DemoRequest sin gym_creado
+        demo = DemoRequest.objects.create(
+            nombre='Serializer Test',
+            email='serializer@test.com',
+            telefono='3001111111',
+            nombre_gimnasio='Serializer Gym'
+        )
+        serializer = DemoRequestSerializer(demo)
+        data = serializer.data
+        
+        # gym_creado debe estar presente y ser None
+        self.assertIn('gym_creado', data)
+        self.assertIsNone(data['gym_creado'])
+        
+        # DemoRequest con gym_creado
+        demo.gym_creado = self.gym
+        demo.save()
+        serializer = DemoRequestSerializer(demo)
+        data = serializer.data
+        
+        # gym_creado debe ser objeto con id y name
+        self.assertIsNotNone(data['gym_creado'])
+        self.assertEqual(data['gym_creado']['id'], self.gym.id)
+        self.assertEqual(data['gym_creado']['name'], self.gym.name)
+        
+        # gym_creado debe ser read_only (no se puede escribir via serializer)
+        # Intentar crear con gym_creado en data debe ignorarlo o fallar
+        create_data = {
+            'nombre': 'New Demo',
+            'email': 'new@demo.com',
+            'telefono': '3002222222',
+            'nombre_gimnasio': 'New Gym',
+            'gym_creado': {'id': self.gym.id, 'name': 'Hacker Gym'}  # Intentar inyectar
+        }
+        create_serializer = DemoRequestSerializer(data=create_data)
+        self.assertTrue(create_serializer.is_valid())
+        # gym_creado no debe estar en validated_data porque es read_only
+        self.assertNotIn('gym_creado', create_serializer.validated_data)
+
+
+# ============================================================
+# AUTO-CREAR GYM DESDE DEMO — Phase 2 Backend Core Tests
+# ============================================================
+
+class OnboardingServiceTest(TestCase):
+    """Tests unitarios para gimnasioApp/services/onboarding.py"""
+    
+    def setUp(self):
+        from gimnasioApp.models import Gimnasio, Usuario, DemoRequest
+        self.gym = Gimnasio.objects.create(name="Test Gym", address="Calle 123", phone="3001112233")
+
+    def test_generate_temp_password_length_and_entropy(self):
+        """generate_temp_password genera password de 12 chars URL-safe con alta entropía."""
+        from gimnasioApp.services.onboarding import generate_temp_password
+        
+        # Llamar múltiples veces para verificar entropía
+        passwords = [generate_temp_password() for _ in range(10)]
+        
+        for pwd in passwords:
+            # Debe tener exactamente 12 caracteres
+            self.assertEqual(len(pwd), 12)
+            # Debe ser URL-safe (solo alfanuméricos, - y _)
+            self.assertTrue(all(c.isalnum() or c in '-_' for c in pwd))
+        
+        # Verificar que no son todos iguales (entropía)
+        self.assertEqual(len(set(passwords)), len(passwords))
+
+    def test_provision_gym_from_demo_creates_gym_admin_link(self):
+        """Happy path: provision crea Gimnasio + Usuario admin + link demo."""
+        from gimnasioApp.services.onboarding import provision_gym_from_demo
+        from gimnasioApp.models import DemoRequest, Gimnasio, Usuario
+        
+        demo = DemoRequest.objects.create(
+            nombre='Juan Perez',
+            email='juan@nuevogym.com',
+            telefono='3005555555',
+            nombre_gimnasio='Gimnasio Nuevo',
+            estado='pendiente'
+        )
+        
+        gym, admin, temp_password = provision_gym_from_demo(demo)
+        
+        # Verificar Gimnasio creado
+        self.assertIsInstance(gym, Gimnasio)
+        self.assertEqual(gym.name, 'Gimnasio Nuevo')
+        self.assertEqual(gym.phone, '3005555555')
+        self.assertEqual(gym.address, '')
+        self.assertTrue(gym.is_active)
+        
+        # Verificar Usuario admin creado
+        self.assertIsInstance(admin, Usuario)
+        self.assertEqual(admin.email, 'juan@nuevogym.com')
+        self.assertEqual(admin.name, 'Admin')
+        self.assertEqual(admin.lastname, 'Gimnasio Nuevo')
+        self.assertEqual(admin.roles, 'admin')
+        self.assertEqual(admin.gimnasio, gym)
+        self.assertTrue(admin.is_active)
+        self.assertTrue(admin.must_change_password)
+        # Verificar que la contraseña está hasheada
+        self.assertTrue(admin.check_password(temp_password))
+        
+        # Verificar link demo -> gym
+        demo.refresh_from_db()
+        self.assertEqual(demo.gym_creado, gym)
+        self.assertEqual(demo.estado, 'pendiente')  # estado no cambia
+
+    def test_provision_gym_from_demo_idempotent_if_already_contactado(self):
+        """Si demo ya tiene gym_creado, NO crea duplicado."""
+        from gimnasioApp.services.onboarding import provision_gym_from_demo
+        from gimnasioApp.models import DemoRequest, Gimnasio, Usuario
+        
+        demo = DemoRequest.objects.create(
+            nombre='Juan Perez',
+            email='juan@nuevogym.com',
+            telefono='3005555555',
+            nombre_gimnasio='Gimnasio Nuevo',
+            estado='contactado'
+        )
+        
+        # Primera provisión
+        gym1, admin1, temp1 = provision_gym_from_demo(demo)
+        
+        # Segunda llamada (idempotente) - temp password puede ser diferente
+        gym2, admin2, temp2 = provision_gym_from_demo(demo)
+        
+        # Debe retornar los mismos objetos gym y admin
+        self.assertEqual(gym1, gym2)
+        self.assertEqual(admin1, admin2)
+        # temp_password se regenera en cada llamada (no se guarda)
+        
+        # Verificar que solo se creó UN gimnasio y UN usuario
+        self.assertEqual(Gimnasio.objects.filter(name='Gimnasio Nuevo').count(), 1)
+        self.assertEqual(Usuario.objects.filter(email='juan@nuevogym.com').count(), 1)
+
+    def test_provision_gym_from_demo_email_duplicate_raises_400(self):
+        """Email ya existe en Usuario -> ValidationError."""
+        from gimnasioApp.services.onboarding import provision_gym_from_demo
+        from gimnasioApp.models import DemoRequest, Gimnasio, Usuario
+        from django.core.exceptions import ValidationError
+        
+        # Crear usuario existente con ese email
+        Usuario.objects.create_user(
+            email='existente@gym.com',
+            password='password123',
+            name='Existente',
+            lastname='User',
+            gimnasio=self.gym
+        )
+        
+        demo = DemoRequest.objects.create(
+            nombre='Juan Perez',
+            email='existente@gym.com',  # Email duplicado
+            telefono='3005555555',
+            nombre_gimnasio='Gimnasio Nuevo',
+            estado='pendiente'
+        )
+        
+        with self.assertRaises(ValidationError) as cm:
+            provision_gym_from_demo(demo)
+        
+        self.assertIn('ya está registrado', str(cm.exception))
+        
+        # Verificar que NO se creó gimnasio ni usuario nuevo
+        self.assertEqual(Gimnasio.objects.filter(name='Gimnasio Nuevo').count(), 0)
+        self.assertEqual(Usuario.objects.filter(email='existente@gym.com').count(), 1)
+
+    def test_provision_gym_from_demo_truncates_phone_and_lastname(self):
+        """phone > 20 y lastname > 50 se truncan."""
+        from gimnasioApp.services.onboarding import provision_gym_from_demo
+        from gimnasioApp.models import DemoRequest, Gimnasio, Usuario
+        
+        # El modelo DemoRequest.telefono tiene max_length=20, truncar antes de crear
+        long_phone = '+57 300 123 4567 ext 8901234'[:20]
+        demo = DemoRequest.objects.create(
+            nombre='Juan Perez',
+            email='juan@truncate.com',
+            telefono=long_phone,
+            nombre_gimnasio='Gimnasio Fitness Center Bogota Colombia Sur America',  # 55+ chars
+            estado='pendiente'
+        )
+        
+        gym, admin, temp_password = provision_gym_from_demo(demo)
+        
+        # Phone truncado a 20
+        self.assertEqual(len(gym.phone), 20)
+        self.assertEqual(gym.phone, '+57 300 123 4567 ext')
+        
+        # Lastname truncado a 50 (el campo Usuario.lastname tiene max_length=50)
+        self.assertLessEqual(len(admin.lastname), 50)
+        # Verificar que es el inicio del nombre_gimnasio
+        self.assertTrue(admin.lastname.startswith('Gimnasio Fitness Center Bogota Colombia'))
+
+    def test_revert_gym_from_demo_soft_deletes(self):
+        """contactado->pendiente: gym.is_active=False, admin.is_active=False, demo.gym_creado=NULL."""
+        from gimnasioApp.services.onboarding import provision_gym_from_demo, revert_gym_from_demo
+        from gimnasioApp.models import DemoRequest, Gimnasio, Usuario
+        
+        demo = DemoRequest.objects.create(
+            nombre='Juan Perez',
+            email='juan@revert.com',
+            telefono='3005555555',
+            nombre_gimnasio='Gym Revert',
+            estado='contactado'
+        )
+        
+        # Provision primero
+        gym, admin, temp_password = provision_gym_from_demo(demo)
+        self.assertTrue(gym.is_active)
+        self.assertTrue(admin.is_active)
+        self.assertEqual(demo.gym_creado, gym)
+        
+        # Ahora revert
+        revert_gym_from_demo(demo)
+        
+        # Verificar soft-delete
+        gym.refresh_from_db()
+        admin.refresh_from_db()
+        demo.refresh_from_db()
+        
+        self.assertFalse(gym.is_active)
+        self.assertFalse(admin.is_active)
+        self.assertIsNone(demo.gym_creado)
+
+
+class DemoRequestViewSetIntegrationTest(TestCase):
+    """Tests de integración para DemoRequestViewSet.perform_update"""
+    
+    def setUp(self):
+        from gimnasioApp.models import Gimnasio, Usuario, DemoRequest
+        from rest_framework.test import APIRequestFactory
+        from rest_framework_simplejwt.tokens import RefreshToken
+        
+        self.factory = APIRequestFactory()
+        
+        # Superadmin user (no gym required)
+        self.superadmin = Usuario.objects.create_user(
+            email='super@admin.com',
+            password='password123',
+            name='Super',
+            lastname='Admin',
+            roles='superadmin'
+        )
+        self.superadmin_token = str(RefreshToken.for_user(self.superadmin).access_token)
+        
+        # Regular admin user (with gym)
+        self.gym = Gimnasio.objects.create(name="Test Gym")
+        self.admin_user = Usuario.objects.create_user(
+            email='admin@gym.com',
+            password='password123',
+            name='Admin',
+            lastname='User',
+            roles='admin',
+            gimnasio=self.gym
+        )
+        self.admin_token = str(RefreshToken.for_user(self.admin_user).access_token)
+
+    import json
+
+    def _patch_demo(self, demo_id, data, token):
+        """Helper para hacer PATCH request autenticado."""
+        request = self.factory.patch(
+            f'/solicitudes-demo/{demo_id}/',
+            data=json.dumps(data),
+            content_type='application/json',
+            HTTP_AUTHORIZATION=f'Bearer {token}'
+        )
+        view = DemoRequestViewSet.as_view({'patch': 'partial_update'})
+        return view(request, pk=demo_id)
+
+    def test_viewset_perform_update_pendiente_to_contactado_creates_gym_admin(self):
+        """Integration: PATCH pendiente->contactado -> 200 + gym_creado en response."""
+        from gimnasioApp.models import DemoRequest, Gimnasio, Usuario
+        from gimnasioApp.serializers import DemoRequestSerializer
+        
+        demo = DemoRequest.objects.create(
+            nombre='Juan Perez',
+            email='juan@integration.com',
+            telefono='3005555555',
+            nombre_gimnasio='Integration Gym',
+            estado='pendiente'
+        )
+        
+        response = self._patch_demo(demo.id, {'estado': 'contactado'}, self.superadmin_token)
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Verificar response incluye gym_creado
+        self.assertIn('gym_creado', response.data)
+        self.assertIsNotNone(response.data['gym_creado'])
+        self.assertEqual(response.data['gym_creado']['name'], 'Integration Gym')
+        
+        # Verificar en BD
+        demo.refresh_from_db()
+        self.assertEqual(demo.estado, 'contactado')
+        self.assertIsNotNone(demo.gym_creado)
+        self.assertEqual(demo.gym_creado.name, 'Integration Gym')
+        
+        gym = demo.gym_creado
+        self.assertTrue(gym.is_active)
+        
+        admin = Usuario.objects.get(gimnasio=gym, roles='admin')
+        self.assertEqual(admin.email, 'juan@integration.com')
+        self.assertTrue(admin.must_change_password)
+
+    def test_viewset_perform_update_idempotent_repatch(self):
+        """Integration: Re-PATCH contactado->contactado NO crea duplicados."""
+        from gimnasioApp.models import DemoRequest, Gimnasio, Usuario
+        
+        demo = DemoRequest.objects.create(
+            nombre='Juan Perez',
+            email='juan@idem.com',
+            telefono='3005555555',
+            nombre_gimnasio='Idempotent Gym',
+            estado='pendiente'
+        )
+        
+        # Primera vez - provision (pendiente -> contactado)
+        response1 = self._patch_demo(demo.id, {'estado': 'contactado'}, self.superadmin_token)
+        self.assertEqual(response1.status_code, 200)
+        
+        gym_id_1 = response1.data['gym_creado']['id']
+        
+        # Segunda vez - idempotente (contactado -> contactado)
+        response2 = self._patch_demo(demo.id, {'estado': 'contactado'}, self.superadmin_token)
+        self.assertEqual(response2.status_code, 200)
+        
+        gym_id_2 = response2.data['gym_creado']['id']
+        
+        # Mismo gym
+        self.assertEqual(gym_id_1, gym_id_2)
+        self.assertEqual(Gimnasio.objects.filter(name='Idempotent Gym').count(), 1)
+        self.assertEqual(Usuario.objects.filter(email='juan@idem.com').count(), 1)
+
+    def test_viewset_perform_update_contactado_to_pendiente_soft_deletes(self):
+        """Integration: PATCH contactado->pendiente -> 200 + gym_creado=null + soft-delete."""
+        from gimnasioApp.models import DemoRequest, Gimnasio, Usuario
+        from gimnasioApp.services.onboarding import provision_gym_from_demo
+        
+        demo = DemoRequest.objects.create(
+            nombre='Juan Perez',
+            email='juan@reverse.com',
+            telefono='3005555555',
+            nombre_gimnasio='Reverse Gym',
+            estado='contactado'
+        )
+        
+        # Provision manual primero (simula estado contactado ya provisionado)
+        gym, admin, _ = provision_gym_from_demo(demo)
+        demo.refresh_from_db()
+        self.assertEqual(demo.gym_creado, gym)
+        self.assertEqual(demo.estado, 'contactado')
+        
+        # Ahora PATCH a pendiente
+        response = self._patch_demo(demo.id, {'estado': 'pendiente'}, self.superadmin_token)
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Verificar response tiene gym_creado=null
+        self.assertIsNone(response.data['gym_creado'])
+        
+        # Verificar en BD
+        demo.refresh_from_db()
+        gym.refresh_from_db()
+        admin.refresh_from_db()
+        
+        self.assertEqual(demo.estado, 'pendiente')
+        self.assertIsNone(demo.gym_creado)
+        self.assertFalse(gym.is_active)
+        self.assertFalse(admin.is_active)
+
+    def test_viewset_perform_update_duplicate_email_returns_400(self):
+        """Integration: email duplicado -> 400 con mensaje guía."""
+        from gimnasioApp.models import DemoRequest, Usuario
+        
+        # Usuario existente
+        Usuario.objects.create_user(
+            email='duplicado@gym.com',
+            password='password123',
+            name='Existente',
+            lastname='User',
+            gimnasio=self.gym
+        )
+        
+        demo = DemoRequest.objects.create(
+            nombre='Juan Perez',
+            email='duplicado@gym.com',
+            telefono='3005555555',
+            nombre_gimnasio='Duplicate Gym',
+            estado='pendiente'
+        )
+        
+        response = self._patch_demo(demo.id, {'estado': 'contactado'}, self.superadmin_token)
+        
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('ya está registrado', str(response.data))
+        
+        # Verificar que no se creó nada
+        self.assertEqual(DemoRequest.objects.filter(email='duplicado@gym.com').count(), 1)
+        self.assertEqual(Usuario.objects.filter(email='duplicado@gym.com').count(), 1)
+
+    def test_viewset_perform_update_unauthenticated_returns_401(self):
+        """Integration: sin auth -> 401."""
+        from gimnasioApp.models import DemoRequest
+        from rest_framework.test import APIRequestFactory
+        
+        demo = DemoRequest.objects.create(
+            nombre='Juan Perez',
+            email='juan@unauth.com',
+            telefono='3005555555',
+            nombre_gimnasio='Unauth Gym',
+            estado='pendiente'
+        )
+        
+        factory = APIRequestFactory()
+        request = factory.patch(
+            f'/solicitudes-demo/{demo.id}/',
+            data={'estado': 'contactado'},
+            content_type='application/json'
+        )
+        view = DemoRequestViewSet.as_view({'patch': 'partial_update'})
+        response = view(request, pk=demo.id)
+        
+        self.assertEqual(response.status_code, 401)
+
+    def test_viewset_perform_update_non_superadmin_returns_403(self):
+        """Integration: admin regular (no superadmin) -> 403."""
+        from gimnasioApp.models import DemoRequest
+        
+        demo = DemoRequest.objects.create(
+            nombre='Juan Perez',
+            email='juan@forbidden.com',
+            telefono='3005555555',
+            nombre_gimnasio='Forbidden Gym',
+            estado='pendiente'
+        )
+        
+        response = self._patch_demo(demo.id, {'estado': 'contactado'}, self.admin_token)
+        
+        self.assertEqual(response.status_code, 403)# ============================================================
+# PHASE 3: EMAIL SERVICE TESTS
+# ============================================================
+
+class EmailServiceTest(TestCase):
+    """Unit tests for send_welcome_email service."""
+
+    def setUp(self):
+        self.gimnasio = Gimnasio.objects.create(name="Test Gym")
+        self.admin = Usuario.objects.create_user(
+            email="admin@test.com",
+            name="Admin",
+            lastname="User",
+            password="password123",
+            roles="admin",
+            gimnasio=self.gimnasio
+        )
+
+    @patch('gimnasioApp.services.email.send_mail')
+    @patch('django.conf.settings.FRONTEND_URL', 'http://localhost:5173')
+    @patch('django.conf.settings.SUPPORT_EMAIL', 'soporte@controlfit.app')
+    @patch('django.conf.settings.DEFAULT_FROM_EMAIL', 'ControlFit <noreply@controlfit.app>')
+    def test_send_welcome_email_renders_templates(self, mock_send_mail):
+        """Test that send_welcome_email renders both HTML and text templates."""
+        from gimnasioApp.services.email import send_welcome_email
+        
+        send_welcome_email(self.gimnasio.id, self.admin.id, 'TempPass123')
+        
+        mock_send_mail.assert_called_once()
+        call_args = mock_send_mail.call_args
+        
+        # Verify subject
+        self.assertIn('Bienvenido a ControlFit', call_args.kwargs['subject'])
+        self.assertIn('Test Gym', call_args.kwargs['subject'])
+        
+        # Verify recipient
+        self.assertEqual(call_args.kwargs['recipient_list'], ['admin@test.com'])
+        
+        # Verify from email
+        self.assertEqual(call_args.kwargs['from_email'], 'ControlFit <noreply@controlfit.app>')
+        
+        # Verify html_message and plain_message are provided
+        self.assertIn('html_message', call_args.kwargs)
+        self.assertIn('message', call_args.kwargs)
+        self.assertTrue(len(call_args.kwargs['html_message']) > 0)
+        self.assertTrue(len(call_args.kwargs['message']) > 0)
+        
+        # Verify content includes key data
+        html = call_args.kwargs['html_message']
+        plain = call_args.kwargs['message']
+        self.assertIn('Test Gym', html)
+        self.assertIn('admin@test.com', html)
+        self.assertIn('TempPass123', html)
+        self.assertIn('http://localhost:5173/login', html)
+        self.assertIn('soporte@controlfit.app', html)
+        self.assertIn('Test Gym', plain)
+        self.assertIn('admin@test.com', plain)
+        self.assertIn('TempPass123', plain)
+
+    @patch('gimnasioApp.services.email.send_mail')
+    @patch('django.conf.settings.FRONTEND_URL', 'http://localhost:5173')
+    @patch('django.conf.settings.SUPPORT_EMAIL', 'soporte@controlfit.app')
+    @patch('django.conf.settings.DEFAULT_FROM_EMAIL', 'ControlFit <noreply@controlfit.app>')
+    def test_send_welcome_email_context_includes_all_fields(self, mock_send_mail):
+        """Test that template context includes all required fields."""
+        from gimnasioApp.services.email import send_welcome_email
+        
+        send_welcome_email(self.gimnasio.id, self.admin.id, 'MyTempPass')
+        
+        call_args = mock_send_mail.call_args
+        html = call_args.kwargs['html_message']
+        plain = call_args.kwargs['message']
+        
+        # Verify all context fields appear in rendered templates
+        self.assertIn('Test Gym', html)  # gym_name
+        self.assertIn('admin@test.com', html)  # admin_email
+        self.assertIn('MyTempPass', html)  # temp_password
+        self.assertIn('http://localhost:5173/login', html)  # login_url
+        self.assertIn('soporte@controlfit.app', html)  # support_email
+        
+        self.assertIn('Test Gym', plain)
+        self.assertIn('admin@test.com', plain)
+        self.assertIn('MyTempPass', plain)
+        self.assertIn('http://localhost:5173/login', plain)
+        self.assertIn('soporte@controlfit.app', plain)
+
+    @patch('gimnasioApp.services.email.logger')
+    def test_send_welcome_email_logs_error_on_missing_gym(self, mock_logger):
+        """Test that missing gym logs error and doesn't raise."""
+        from gimnasioApp.services.email import send_welcome_email
+        
+        # Call with non-existent gym_id
+        send_welcome_email(99999, self.admin.id, 'TempPass123')
+        
+        mock_logger.error.assert_called()
+        call_args = mock_logger.error.call_args[0]
+        self.assertIn('not found', call_args[0])
+
+    @patch('gimnasioApp.services.email.logger')
+    def test_send_welcome_email_logs_error_on_missing_admin(self, mock_logger):
+        """Test that missing admin logs error and doesn't raise."""
+        from gimnasioApp.services.email import send_welcome_email
+        
+        # Call with non-existent admin_id
+        send_welcome_email(self.gimnasio.id, 99999, 'TempPass123')
+        
+        mock_logger.error.assert_called()
+        call_args = mock_logger.error.call_args[0]
+        self.assertIn('not found', call_args[0])
+
+    @patch('gimnasioApp.services.email.send_mail', side_effect=Exception('SMTP Error'))
+    @patch('gimnasioApp.services.email.logger')
+    @patch('django.conf.settings.FRONTEND_URL', 'http://localhost:5173')
+    @patch('django.conf.settings.SUPPORT_EMAIL', 'soporte@controlfit.app')
+    @patch('django.conf.settings.DEFAULT_FROM_EMAIL', 'ControlFit <noreply@controlfit.app>')
+    def test_send_welcome_email_logs_error_on_send_failure(self, mock_logger, mock_send_mail):
+        """Test that send_mail failure logs exception and doesn't re-raise."""
+        from gimnasioApp.services.email import send_welcome_email
+        
+        # Should not raise
+        send_welcome_email(self.gimnasio.id, self.admin.id, 'TempPass123')
+        
+        mock_logger.exception.assert_called()
+        call_args = mock_logger.exception.call_args
+        # call_args[0] is the format string, call_args[1] are the args
+        self.assertIn('Failed to send welcome email', call_args[0][0])
+        self.assertIn('admin@test.com', call_args[0][1])
+
+
+class DemoRequestSerializerEmailSentTest(TestCase):
+    """Tests for email_sent SerializerMethodField in DemoRequestSerializer."""
+
+    def setUp(self):
+        self.gimnasio = Gimnasio.objects.create(name="Test Gym")
+        self.demo = DemoRequest.objects.create(
+            nombre="Juan Perez",
+            email="juan@test.com",
+            telefono="3005555555",
+            nombre_gimnasio="Test Gym",
+            estado='pendiente'
+        )
+
+    def test_email_sent_false_when_gym_creado_none(self):
+        """email_sent should be False when gym_creado is None."""
+        serializer = DemoRequestSerializer(self.demo)
+        self.assertFalse(serializer.data['email_sent'])
+
+    def test_email_sent_true_when_gym_creado_exists(self):
+        """email_sent should be True when gym_creado exists."""
+        self.demo.gym_creado = self.gimnasio
+        self.demo.save()
+        
+        serializer = DemoRequestSerializer(self.demo)
+        self.assertTrue(serializer.data['email_sent'])
+
+
+class DemoRequestViewSetEmailIntegrationTest(TransactionTestCase):
+    """Integration tests for email wiring in DemoRequestViewSet."""
+
+    def setUp(self):
+        self.gimnasio = Gimnasio.objects.create(name="Test Gym")
+        self.superadmin = Usuario.objects.create_user(
+            email="super@test.com",
+            name="Super",
+            lastname="Admin",
+            password="password123",
+            roles="superadmin",
+            gimnasio=None
+        )
+        self.factory = APIRequestFactory()
+
+    def _patch_demo(self, demo_id, data, token):
+        import json
+        request = self.factory.patch(
+            f'/solicitudes-demo/{demo_id}/',
+            data=json.dumps(data),
+            content_type='application/json',
+            HTTP_AUTHORIZATION=f'Bearer {token}'
+        )
+        view = DemoRequestViewSet.as_view({'patch': 'partial_update'})
+        return view(request, pk=demo_id)
+
+    @patch('gimnasioApp.views.send_welcome_email')
+    def test_viewset_wires_email_on_commit(self, mock_send_welcome_email):
+        """Integration: transaction.on_commit calls _send_welcome_email_safe."""
+        from rest_framework_simplejwt.tokens import RefreshToken
+        import uuid
+
+        refresh = RefreshToken.for_user(self.superadmin)
+        self.superadmin_token = str(refresh.access_token)
+        
+        # Use unique email to avoid conflicts with existing test data
+        unique_email = f"juan_{uuid.uuid4().hex[:8]}@newgym.com"
+        demo = DemoRequest.objects.create(
+            nombre="Juan Perez",
+            email=unique_email,
+            telefono="3005555555",
+            nombre_gimnasio="New Gym",
+            estado='pendiente'
+        )
+        
+        response = self._patch_demo(demo.id, {'estado': 'contactado'}, self.superadmin_token)
+        
+        self.assertEqual(response.status_code, 200)
+        demo.refresh_from_db()
+        self.assertIsNotNone(demo.gym_creado)
+        
+        # In TransactionTestCase, on_commit callbacks run immediately
+        mock_send_welcome_email.assert_called_once()
+        call_args = mock_send_welcome_email.call_args[0]
+        self.assertEqual(call_args[0], demo.gym_creado.id)
+        self.assertEqual(call_args[1], Usuario.objects.get(email=unique_email).id)
+        self.assertTrue(len(call_args[2]) > 0)  # temp_password
+
+
+# ============================================================
+# PHASE 4: PASSWORD CHANGE FLOW TESTS
+# ============================================================
+
+class PasswordChangeSerializerTest(TestCase):
+    """Tests for PasswordChangeSerializer validation."""
+
+    def setUp(self):
+        self.gym = Gimnasio.objects.create(name="Test Gym")
+        self.user = Usuario.objects.create_user(
+            email='test@gym.com',
+            password='TempPass123',
+            name='Test',
+            lastname='User',
+            roles='admin',
+            gimnasio=self.gym
+        )
+
+    def test_serializer_valid_data(self):
+        """Serializer accepts valid old_password, new_password, confirm_password."""
+        from gimnasioApp.serializers import PasswordChangeSerializer
+        
+        serializer = PasswordChangeSerializer(data={
+            'old_password': 'TempPass123',
+            'new_password': 'NewPass456',
+            'confirm_password': 'NewPass456'
+        })
+        self.assertTrue(serializer.is_valid())
+        self.assertEqual(serializer.validated_data['old_password'], 'TempPass123')
+        self.assertEqual(serializer.validated_data['new_password'], 'NewPass456')
+
+    def test_serializer_rejects_mismatched_passwords(self):
+        """Serializer rejects when new_password != confirm_password."""
+        from gimnasioApp.serializers import PasswordChangeSerializer
+        
+        serializer = PasswordChangeSerializer(data={
+            'old_password': 'TempPass123',
+            'new_password': 'NewPass456',
+            'confirm_password': 'DifferentPass789'
+        })
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('confirm_password', serializer.errors)
+        self.assertIn('coinciden', str(serializer.errors['confirm_password']).lower())
+
+    def test_serializer_rejects_short_new_password(self):
+        """Serializer rejects new_password < 8 characters."""
+        from gimnasioApp.serializers import PasswordChangeSerializer
+        
+        serializer = PasswordChangeSerializer(data={
+            'old_password': 'TempPass123',
+            'new_password': 'Short1',
+            'confirm_password': 'Short1'
+        })
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('new_password', serializer.errors)
+
+    def test_serializer_rejects_missing_fields(self):
+        """Serializer rejects when required fields are missing."""
+        from gimnasioApp.serializers import PasswordChangeSerializer
+        
+        serializer = PasswordChangeSerializer(data={})
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('old_password', serializer.errors)
+        self.assertIn('new_password', serializer.errors)
+        self.assertIn('confirm_password', serializer.errors)
+
+
+class PasswordChangeViewTest(TestCase):
+    """Tests for PasswordChangeView endpoint."""
+
+    def setUp(self):
+        self.gym = Gimnasio.objects.create(name="Test Gym")
+        self.user = Usuario.objects.create_user(
+            email='test@gym.com',
+            password='TempPass123',
+            name='Test',
+            lastname='User',
+            roles='admin',
+            gimnasio=self.gym
+        )
+        self.user.must_change_password = True
+        self.user.save()
+        
+        from rest_framework.test import APIRequestFactory
+        from rest_framework_simplejwt.tokens import RefreshToken
+        
+        self.factory = APIRequestFactory()
+        self.token = str(RefreshToken.for_user(self.user).access_token)
+
+    def _post_password_change(self, data, token=None):
+        """Helper to POST to password change endpoint."""
+        from gimnasioApp.views import PasswordChangeView
+        import json
+        
+        request = self.factory.post(
+            '/auth/password/change/',
+            data=json.dumps(data),
+            content_type='application/json',
+            HTTP_AUTHORIZATION=f'Bearer {token or self.token}'
+        )
+        view = PasswordChangeView.as_view()
+        return view(request)
+
+    def test_password_change_success_resets_flag(self):
+        """Happy path: valid old_password + matching new passwords -> 200, must_change_password=False."""
+        response = self._post_password_change({
+            'old_password': 'TempPass123',
+            'new_password': 'NewSecurePass456',
+            'confirm_password': 'NewSecurePass456'
+        })
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('detail', response.data)
+        self.assertIn('actualizada', response.data['detail'].lower())
+        
+        # Verify flag is reset
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.must_change_password)
+        
+        # Verify password actually changed
+        self.assertTrue(self.user.check_password('NewSecurePass456'))
+
+    def test_password_change_wrong_old_password_returns_400(self):
+        """Wrong old_password -> 400 with error on old_password field."""
+        response = self._post_password_change({
+            'old_password': 'WrongPassword',
+            'new_password': 'NewSecurePass456',
+            'confirm_password': 'NewSecurePass456'
+        })
+        
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('old_password', response.data)
+        self.assertIn('incorrecta', str(response.data['old_password']).lower())
+        
+        # Flag should remain True
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.must_change_password)
+
+    def test_password_change_mismatched_new_passwords_returns_400(self):
+        """new_password != confirm_password -> 400 with error on confirm_password."""
+        response = self._post_password_change({
+            'old_password': 'TempPass123',
+            'new_password': 'NewSecurePass456',
+            'confirm_password': 'DifferentPass789'
+        })
+        
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('confirm_password', response.data)
+        self.assertIn('coinciden', str(response.data['confirm_password']).lower())
+
+    def test_password_change_short_new_password_returns_400(self):
+        """new_password < 8 chars -> 400 with error on new_password."""
+        response = self._post_password_change({
+            'old_password': 'TempPass123',
+            'new_password': 'Short1',
+            'confirm_password': 'Short1'
+        })
+        
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('new_password', response.data)
+
+    def test_password_change_unauthenticated_returns_401(self):
+        """Unauthenticated request -> 401."""
+        from gimnasioApp.views import PasswordChangeView
+        
+        request = self.factory.post(
+            '/auth/password/change/',
+            data={'old_password': 'TempPass123', 'new_password': 'NewPass456', 'confirm_password': 'NewPass456'},
+            content_type='application/json'
+        )
+        view = PasswordChangeView.as_view()
+        response = view(request)
+        
+        self.assertEqual(response.status_code, 401)
+
+    def test_password_change_user_without_flag_still_works(self):
+        """User without must_change_password=True can still change password."""
+        # Create a fresh user without the flag to avoid interference from previous tests
+        fresh_user = Usuario.objects.create_user(
+            email='fresh@gym.com',
+            password='TempPass123',
+            name='Fresh',
+            lastname='User',
+            roles='admin',
+            gimnasio=self.gym
+        )
+        fresh_user.must_change_password = False
+        fresh_user.save()
+        
+        from rest_framework_simplejwt.tokens import RefreshToken
+        fresh_token = str(RefreshToken.for_user(fresh_user).access_token)
+        
+        response = self._post_password_change({
+            'old_password': 'TempPass123',
+            'new_password': 'AnotherNewPass789',
+            'confirm_password': 'AnotherNewPass789'
+        }, token=fresh_token)
+        
+        self.assertEqual(response.status_code, 200)
+        fresh_user.refresh_from_db()
+        self.assertTrue(fresh_user.check_password('AnotherNewPass789'))
+
+
+class RequirePasswordChangePermissionTest(TestCase):
+    """Tests for RequirePasswordChange permission class."""
+
+    def setUp(self):
+        self.gym = Gimnasio.objects.create(name="Test Gym")
+        self.user_with_flag = Usuario.objects.create_user(
+            email='withflag@gym.com',
+            password='TempPass123',
+            name='With',
+            lastname='Flag',
+            roles='admin',
+            gimnasio=self.gym
+        )
+        self.user_with_flag.must_change_password = True
+        self.user_with_flag.save()
+        
+        self.user_without_flag = Usuario.objects.create_user(
+            email='withoutflag@gym.com',
+            password='NormalPass123',
+            name='Without',
+            lastname='Flag',
+            roles='admin',
+            gimnasio=self.gym
+        )
+        
+        from rest_framework.test import APIRequestFactory
+        from rest_framework_simplejwt.tokens import RefreshToken
+        
+        self.factory = APIRequestFactory()
+        self.token_with_flag = str(RefreshToken.for_user(self.user_with_flag).access_token)
+        self.token_without_flag = str(RefreshToken.for_user(self.user_without_flag).access_token)
+
+    def test_permission_allows_access_when_flag_false(self):
+        """User with must_change_password=False can access protected views."""
+        from gimnasioApp.permissions import RequirePasswordChange
+        from gimnasioApp.views import Home
+        
+        request = self.factory.get('/home/', HTTP_AUTHORIZATION=f'Bearer {self.token_without_flag}')
+        request.user = self.user_without_flag
+        
+        perm = RequirePasswordChange()
+        # Simulate a view with basename that's not excluded
+        class MockView:
+            basename = 'home'
+        view = MockView()
+        
+        self.assertTrue(perm.has_permission(request, view))
+
+    def test_permission_denies_access_when_flag_true(self):
+        """User with must_change_password=True is denied access to protected views."""
+        from gimnasioApp.permissions import RequirePasswordChange
+        
+        request = self.factory.get('/home/', HTTP_AUTHORIZATION=f'Bearer {self.token_with_flag}')
+        request.user = self.user_with_flag
+        
+        perm = RequirePasswordChange()
+        class MockView:
+            basename = 'home'
+        view = MockView()
+        
+        self.assertFalse(perm.has_permission(request, view))
+        self.assertIn('cambiar', perm.message.lower())
+
+    def test_permission_allows_password_change_endpoint(self):
+        """Password change endpoint is accessible even when flag is True."""
+        from gimnasioApp.permissions import RequirePasswordChange
+        
+        request = self.factory.post('/auth/password/change/', HTTP_AUTHORIZATION=f'Bearer {self.token_with_flag}')
+        request.user = self.user_with_flag
+        
+        perm = RequirePasswordChange()
+        class MockView:
+            basename = 'password-change'
+        view = MockView()
+        
+        self.assertTrue(perm.has_permission(request, view))
+
+    def test_permission_allows_logout_endpoint(self):
+        """Logout endpoint is accessible even when flag is True."""
+        from gimnasioApp.permissions import RequirePasswordChange
+        
+        request = self.factory.post('/auth/logout/', HTTP_AUTHORIZATION=f'Bearer {self.token_with_flag}')
+        request.user = self.user_with_flag
+        
+        perm = RequirePasswordChange()
+        class MockView:
+            basename = 'logout'
+        view = MockView()
+        
+        self.assertTrue(perm.has_permission(request, view))

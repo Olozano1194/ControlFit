@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bienvenido a ControlFit</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1f2937; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 28px;">¡Bienvenido a ControlFit!</h1>
+    </div>
+
+    <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px; border: 1px solid #e5e7eb; border-top: none;">
+        <p style="font-size: 16px; margin-bottom: 20px;">Tu gimnasio <strong>{{ gym_name }}</strong> ya está configurado y listo para usar.</p>
+
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <h2 style="font-size: 18px; margin-top: 0; color: #374151;">Tus credenciales de acceso</h2>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="padding: 8px 0; color: #6b7280; font-weight: 500;">Usuario:</td>
+                    <td style="padding: 8px 0; font-family: monospace; background: #f3f4f6; border-radius: 4px; padding: 8px 12px;">{{ admin_email }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #6b7280; font-weight: 500;">Contraseña temporal:</td>
+                    <td style="padding: 8px 0; font-family: monospace; background: #fef3c7; border-radius: 4px; padding: 8px 12px; color: #92400e;">{{ temp_password }}</td>
+                </tr>
+            </table>
+        </div>
+
+        <div style="background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 16px; margin: 20px 0;">
+            <p style="margin: 0; color: #92400e;"><strong>⚠️ Importante:</strong> Por seguridad, debes cambiar esta contraseña temporal en tu primer inicio de sesión. El sistema te guiará automáticamente.</p>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{ login_url }}" style="display: inline-block; background: #3b82f6; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600;">Acceder a ControlFit</a>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+
+        <p style="color: #6b7280; font-size: 14px; margin: 0;">
+            Si tienes dudas, contacta a nuestro equipo de soporte:<br>
+            <a href="mailto:{{ support_email }}" style="color: #3b82f6;">{{ support_email }}</a>
+        </p>
+    </div>
+
+    <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
+        <p>© {new Date().getFullYear()} ControlFit. Todos los derechos reservados.</p>
+    </div>
+</body>
+</html>
