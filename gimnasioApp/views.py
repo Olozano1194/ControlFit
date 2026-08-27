@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from .auth_cookie import set_refresh_cookie, clear_refresh_cookie
-from .serializers import UsuarioSerializer, UsuarioGymSerializer, UsuarioGymDaySerializer, MembresiasSerializer, MembresiaAsignadaSerializer, PagoMembresiaSerializer, TipoEventoSerializer, EventoCalendarioSerializer, NotificationSerializer
+from .serializers import UsuarioSerializer, UsuarioGymSerializer, UsuarioGymDaySerializer, MembresiasSerializer, MembresiaAsignadaSerializer, PagoMembresiaSerializer, TipoEventoSerializer, EventoCalendarioSerializer, NotificationSerializer, PasswordChangeSerializer
 from .models import Usuario, UsuarioGym, UsuarioGymDay, Membresia, MembresiaAsignada, PagoMembresia, Gimnasio, TipoEvento, EventoCalendario, Notification
 from django.utils import timezone
 from django.http import JsonResponse, HttpResponse
@@ -23,7 +23,7 @@ from datetime import datetime, date, timedelta
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 # Importar permisos personalizados
-from .permissions import IsAdminUser, IsRecepcionUser, IsSuperAdmin
+from .permissions import IsAdminUser, IsRecepcionUser, IsSuperAdmin, RequirePasswordChange
 from .mixins import MultiTenantViewSetMixin
 from .services.notifications import NotificationManager
 from decimal import Decimal
@@ -50,7 +50,7 @@ class PlatformPagination(PageNumberPagination):
 class UserViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
     queryset = Usuario.objects.all()
     serializer_class = UsuarioSerializer
-    permission_classes = [IsAuthenticated, IsAdminUser]  # Solo admins pueden gestionar usuarios
+    permission_classes = [IsAuthenticated, IsAdminUser, RequirePasswordChange]  # Solo admins pueden gestionar usuarios
     parser_classes = (MultiPartParser, FormParser)
 
     def create(self, request, *args, **kwargs):
@@ -203,8 +203,39 @@ class LogoutView(APIView):
         return response
 
 
-class userProfileView(APIView):
+# ============================================================
+# PASSWORD CHANGE ENDPOINT
+# ============================================================
+
+class PasswordChangeView(APIView):
+    """Cambio de contraseña para usuarios con must_change_password=True."""
     permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        serializer = PasswordChangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        user = request.user
+        old_password = serializer.validated_data['old_password']
+        new_password = serializer.validated_data['new_password']
+        
+        # Verificar password actual
+        if not user.check_password(old_password):
+            return Response(
+                {'old_password': 'La contraseña actual es incorrecta.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Actualizar password y resetear flag
+        user.set_password(new_password)
+        user.must_change_password = False
+        user.save(update_fields=['password', 'must_change_password'])
+        
+        return Response({'detail': 'Contraseña actualizada correctamente. Inicia sesión de nuevo.'})
+
+
+class userProfileView(APIView):
+    permission_classes = [IsAuthenticated, RequirePasswordChange]
 
     def get(self, request):
         try:
@@ -234,7 +265,7 @@ class userProfileView(APIView):
 class UsuarioGymViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
     queryset = UsuarioGym.objects.all()
     serializer_class = UsuarioGymSerializer
-    permission_classes = [IsAuthenticated, IsRecepcionUser]  # Admin y recepcion pueden acceder
+    permission_classes = [IsAuthenticated, IsRecepcionUser, RequirePasswordChange]  # Admin y recepcion pueden acceder
     filter_backends = [DjangoFilterBackend, SearchFilter]
     search_fields = ['name', 'lastname']
 
@@ -242,7 +273,7 @@ class UsuarioGymViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
 class UsuarioGymDayViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
     queryset = UsuarioGymDay.objects.all()
     serializer_class = UsuarioGymDaySerializer
-    permission_classes = [IsAuthenticated, IsRecepcionUser]  # Admin y recepcion pueden acceder
+    permission_classes = [IsAuthenticated, IsRecepcionUser, RequirePasswordChange]  # Admin y recepcion pueden acceder
     filter_backends = [DjangoFilterBackend, SearchFilter]
     search_fields = ['name', 'lastname']
 
@@ -262,7 +293,7 @@ class UsuarioGymDayViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
 # ============================================================
 
 class DashboardStatsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequirePasswordChange]
     
     def get(self, request):
         from django.db.models import Count, Q
@@ -346,7 +377,7 @@ class DashboardStatsView(APIView):
 # ============================================================
 
 class Home(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequirePasswordChange]
     
     def get(self, request):
         gimnasio = request.gimnasio
@@ -445,13 +476,13 @@ class Home(APIView):
 class MembresiaViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
     queryset = Membresia.objects.all()
     serializer_class = MembresiasSerializer
-    permission_classes = [IsAuthenticated, IsRecepcionUser]
+    permission_classes = [IsAuthenticated, IsRecepcionUser, RequirePasswordChange]
 
 
 class MembresiaAsignadaViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
     queryset = MembresiaAsignada.objects.all()
     serializer_class = MembresiaAsignadaSerializer
-    permission_classes = [IsAuthenticated, IsRecepcionUser]
+    permission_classes = [IsAuthenticated, IsRecepcionUser, RequirePasswordChange]
     filter_backends = [DjangoFilterBackend, SearchFilter]
     search_fields = ['miembro__name', 'miembro__lastname']
     gimnasio_field = 'miembro__gimnasio'
@@ -474,7 +505,7 @@ class MembresiaAsignadaViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
 
 class PagoMembresiaViewSet(viewsets.ModelViewSet):
     serializer_class = PagoMembresiaSerializer
-    permission_classes = [IsAuthenticated, IsRecepcionUser]
+    permission_classes = [IsAuthenticated, IsRecepcionUser, RequirePasswordChange]
 
     def get_membresia_asignada(self):
         pk = self.kwargs.get('pk')
@@ -516,7 +547,7 @@ class NotificationViewSet(MultiTenantViewSetMixin, viewsets.ReadOnlyModelViewSet
     """
     queryset = Notification.objects.all()
     serializer_class = NotificationSerializer
-    permission_classes = [IsAuthenticated, IsRecepcionUser]
+    permission_classes = [IsAuthenticated, IsRecepcionUser, RequirePasswordChange]
 
     def get_queryset(self):
         """Solo notificaciones no leídas del gimnasio del request."""
@@ -556,7 +587,7 @@ class NotificationViewSet(MultiTenantViewSetMixin, viewsets.ReadOnlyModelViewSet
 # ============================================================
 
 class ActivitiesView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequirePasswordChange]
     
     def get(self, request):
         gimnasio = request.gimnasio
@@ -666,7 +697,7 @@ class ActivitiesView(APIView):
 # ============================================================
 
 class ExportReportView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequirePasswordChange]
 
     def get(self, request):
         gimnasio = request.gimnasio
@@ -827,13 +858,13 @@ class ExportReportView(APIView):
 class TipoEventoViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
     queryset = TipoEvento.objects.all()
     serializer_class = TipoEventoSerializer
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminUser, RequirePasswordChange]
 
 
 class EventoCalendarioViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
     queryset = EventoCalendario.objects.all()
     serializer_class = EventoCalendarioSerializer
-    permission_classes = [IsAuthenticated, IsRecepcionUser]
+    permission_classes = [IsAuthenticated, IsRecepcionUser, RequirePasswordChange]
 
     def get_queryset(self):
         qs = super().get_queryset().select_related('tipo')
@@ -864,11 +895,19 @@ class PublicCalendarioView(APIView):
 # ============================================================
 from .models import DemoRequest
 from .serializers import DemoRequestSerializer
+from .services.onboarding import provision_gym_from_demo, revert_gym_from_demo
+from .services.email import send_welcome_email
+from django.db import transaction
+from django.core.exceptions import ValidationError
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class DemoRequestViewSet(viewsets.ModelViewSet):
     """
     Endpoint para recibir solicitudes de demo desde la landing/login.
-    POST público (sin autenticar). GET y PATCH solo para admins autenticados.
+    POST público (sin autenticar). GET y PATCH solo para superadmins autenticados.
     """
     queryset = DemoRequest.objects.all()
     serializer_class = DemoRequestSerializer
@@ -877,11 +916,53 @@ class DemoRequestViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.request.method == 'POST':
             return [AllowAny()]
-        return [IsAuthenticated()]
+        # PATCH y GET requieren superadmin
+        return [IsAuthenticated(), IsSuperAdmin()]
 
     def perform_create(self, serializer):
         # Acá a futuro podés agregar lógica para mandarte un email automático
         serializer.save()
+
+    def _send_welcome_email_safe(self, gym_id: int, admin_id: int, temp_password: str):
+        try:
+            send_welcome_email(gym_id, admin_id, temp_password)
+        except Exception:
+            logger.exception("Failed to send welcome email for gym %s, admin %s", gym_id, admin_id)
+
+    def perform_update(self, serializer):
+        demo = self.get_object()
+        old_estado = demo.estado
+        new_estado = serializer.validated_data.get('estado', old_estado)
+        
+        if old_estado == 'pendiente' and new_estado == 'contactado':
+            if demo.gym_creado:
+                # Idempotente: ya provisionado, solo actualizar estado
+                serializer.save()
+                return
+            
+            try:
+                gym, admin, temp_pass = provision_gym_from_demo(demo)
+                serializer.save(gym_creado=gym)
+                
+                # Email sync post-commit (fire-and-forget con logging)
+                transaction.on_commit(lambda: self._send_welcome_email_safe(gym.id, admin.id, temp_pass))
+                
+            except ValidationError as e:
+                # Convertir Django ValidationError a DRF ValidationError para 400 response
+                from rest_framework.exceptions import ValidationError as DRFValidationError
+                raise DRFValidationError(e.messages[0] if e.messages else str(e))
+            except Exception as e:
+                # Log y re-lanzar como 500
+                logger.exception("Error provisioning gym from demo %s", demo.id)
+                raise
+                
+        elif old_estado == 'contactado' and new_estado == 'pendiente':
+            # Reverso con cleanup
+            revert_gym_from_demo(demo)
+            serializer.save(gym_creado=None)
+            
+        else:
+            serializer.save()
 
 
 # ============================================================
@@ -896,7 +977,7 @@ from decimal import Decimal
 
 class PlatformStatsView(APIView):
     """Estadísticas globales de la plataforma (solo superadmin)."""
-    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    permission_classes = [IsAuthenticated, IsSuperAdmin, RequirePasswordChange]
 
     def get(self, request):
         today = date.today()
@@ -993,7 +1074,7 @@ class PlatformStatsView(APIView):
 
 class GimnasioPlatformViewSet(viewsets.ModelViewSet):
     """CRUD de gimnasios para superadmin (sin filtro multi-tenant)."""
-    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    permission_classes = [IsAuthenticated, IsSuperAdmin, RequirePasswordChange]
     pagination_class = PlatformPagination
     queryset = Gimnasio.objects.all().order_by('-created_at')
     filter_backends = [DjangoFilterBackend, SearchFilter]
