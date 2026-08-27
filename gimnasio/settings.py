@@ -236,3 +236,24 @@ CORS_EXPOSE_HEADERS = ['Content-Type', 'Authorization']
 # WhatsApp Configuration
 # Número de WhatsApp del gimnasio para notificaciones (formato: 57XXXXXXXXX)
 WHATSAPP_NUMBER = os.environ.get('WHATSAPP_NUMBER', '573001234567')
+
+# ============================================================
+# EMAIL CONFIGURATION
+# ============================================================
+# Dev: console backend (prints to stdout)
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'ControlFit <noreply@controlfit.app>')
+
+# Prod SMTP (opcional, via env vars)
+# EMAIL_HOST = os.getenv('EMAIL_HOST')
+# EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+# EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+# EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+# EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+
+# Frontend URL for email links
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+SUPPORT_EMAIL = os.getenv('SUPPORT_EMAIL', 'soporte@controlfit.app')
+
+# Template directories
+TEMPLATES[0]['DIRS'] = [BASE_DIR / 'gimnasioApp' / 'templates']
