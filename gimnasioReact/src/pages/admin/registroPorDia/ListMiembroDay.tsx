@@ -32,7 +32,7 @@ type DayMember = MiembroTotal | MemberDay;
 const ListMiembroDay = () => {
     const [users, setUser] = useState<MemberDay[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [filteredData, setFilteredData] = useState<number | null>(null);
+    const [filteredData, setFilteredData] = useState<ReturnType<typeof setTimeout> | null>(null);
     const [search, setSearch] = useState('');
 
     // Función en donde se buscan los datos

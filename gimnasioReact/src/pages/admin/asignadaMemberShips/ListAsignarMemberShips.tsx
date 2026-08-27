@@ -45,7 +45,7 @@ type Asignacion = AsignacionTotal | AsignarMemberShips;
 const ListAsignarMemberShips = () => {    
     const [asignarMemberShips, setAsignarMemberShips] = useState<Asignacion[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [filteredData, setFilteredData] = useState<number | null>(null);
+    const [filteredData, setFilteredData] = useState<ReturnType<typeof setTimeout> | null>(null);
     const [search, setSearch] = useState('');
     const [pagoModal, setPagoModal] = useState<{
         open: boolean;
