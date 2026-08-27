@@ -29,8 +29,8 @@ class UsuarioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Usuario
         fields = ['id', 'email', 'name', 'lastname', 'roles', 'gimnasio', 'gimnasio_name',
-                  'avatar', 'is_active', 'created_at', 'password']
-        read_only_fields = ('id', 'created_at', 'is_active', 'gimnasio', 'gimnasio_name')
+                  'avatar', 'is_active', 'created_at', 'password', 'must_change_password']
+        read_only_fields = ('id', 'created_at', 'is_active', 'gimnasio', 'gimnasio_name', 'must_change_password')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
