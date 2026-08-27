@@ -9,6 +9,7 @@ import Login from './pages/auth/LoginPage';
 import Register from './pages/auth/RegisterPage';
 import SolicitarDemo from './pages/auth/SolicitarDemoPage';
 import ForgetPassword from './pages/auth/ForgetPassword';
+import { PasswordChangeRequiredPage } from './pages/auth/PasswordChangeRequiredPage';
 //Pages admin
 import Home from './pages/admin/HomePage';
 import ListUser from './pages/admin/usuarios/ListUser';
@@ -54,6 +55,7 @@ function App() {
       <Route path="login" element={<Login />} />
       <Route path="solicitar-demo" element={<SolicitarDemo />} />
       <Route path="forget-password" element={<ForgetPassword />} />
+      <Route path="cambiar-password" element={<PasswordChangeRequiredPage />} />
 
       {/* Rutas de la plataforma — solo superadmin */}
       <Route element={<SuperAdminRoute />}>

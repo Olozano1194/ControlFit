@@ -9,4 +9,5 @@ export interface User {
     repeatPass?: string;
     gimnasio?: number;
     gimnasio_name?: string;
+    must_change_password?: boolean;
 };

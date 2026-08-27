@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework import routers
-from .views import UserViewSet, userProfileView, UsuarioGymViewSet, UsuarioGymDayViewSet, Home, MembresiaViewSet, MembresiaAsignadaViewSet, PagoMembresiaViewSet, ActivitiesView, ExportReportView, RegisterViewSet, DashboardStatsView, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView, NotificationViewSet, CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView, PlatformStatsView, GimnasioPlatformViewSet
+from .views import UserViewSet, userProfileView, UsuarioGymViewSet, UsuarioGymDayViewSet, Home, MembresiaViewSet, MembresiaAsignadaViewSet, PagoMembresiaViewSet, ActivitiesView, ExportReportView, RegisterViewSet, DashboardStatsView, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView, NotificationViewSet, CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView, PlatformStatsView, GimnasioPlatformViewSet, PasswordChangeView
 
 #api versioning
 router = routers.DefaultRouter()
@@ -38,6 +38,7 @@ urlpatterns = [
     path('gym/api/v1/token/', CookieTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('gym/api/v1/token/refresh/', CookieTokenRefreshView.as_view(), name='token_refresh'),
     path('gym/api/v1/auth/logout/', LogoutView.as_view(), name='auth_logout'),
+    path('gym/api/v1/auth/password/change/', PasswordChangeView.as_view(), name='password-change'),
     
     # Endpoint público de calendario (NO bajo /gym/api/v1)
     path('api/calendario/publico/<int:gimnasio_id>/', PublicCalendarioView.as_view(), name='calendario-publico'),
