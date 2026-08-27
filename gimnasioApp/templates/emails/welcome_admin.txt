@@ -1,4 +1,4 @@
-¡Bienvenido a ControlFit! 🎉
+¡Bienvenido a ControlFit!
 
 Tu gimnasio {{ gym_name }} ya está configurado y listo para usar.
 
@@ -7,7 +7,7 @@ TUS CREDENCIALES DE ACCESO
 Usuario: {{ admin_email }}
 Contraseña temporal: {{ temp_password }}
 
-⚠️ IMPORTANTE: Por seguridad, debes cambiar esta contraseña temporal en tu primer inicio de sesión. El sistema te guiará automáticamente.
+IMPORTANTE: Por seguridad, debes cambiar esta contraseña temporal en tu primer inicio de sesión. El sistema te guiará automáticamente.
 
 Accede aquí: {{ login_url }}
 
