@@ -5,9 +5,6 @@ from .models import Gimnasio, Usuario, UsuarioGym, UsuarioGymDay, Membresia, Mem
 from datetime import timedelta, date
 from decimal import Decimal
 
-#token
-from rest_framework.authtoken.models import Token
-
 
 # ============================================================
 # GIMNASIO SERIALIZER
@@ -430,11 +427,18 @@ class GimnasioCreadoSerializer(serializers.ModelSerializer):
 
 class DemoRequestSerializer(serializers.ModelSerializer):
     gym_creado = GimnasioCreadoSerializer(read_only=True)
+    email_sent = serializers.SerializerMethodField()
     
     class Meta:
         model = DemoRequest
         fields = '__all__'
         read_only_fields = ('id', 'fecha_solicitud', 'gym_creado')
+    
+    def get_email_sent(self, obj):
+        # True si el gym fue creado y el email se intentó enviar
+        # Como es fire-and-forget, no podemos garantizar entrega
+        # Retornamos True si gym_creado existe (email fue disparado)
+        return obj.gym_creado is not None
 
 
 # ============================================================
@@ -497,3 +501,22 @@ class GimnasioPlatformDetailSerializer(GimnasioPlatformSerializer):
 
     class Meta(GimnasioPlatformSerializer.Meta):
         fields = GimnasioPlatformSerializer.Meta.fields + ['usuarios', 'miembros_activos', 'ultimos_pagos']
+
+
+# ============================================================
+# PASSWORD CHANGE SERIALIZER
+# ============================================================
+
+class PasswordChangeSerializer(serializers.Serializer):
+    """Serializer for password change endpoint.
+    
+    Validates old_password, new_password, and confirm_password.
+    """
+    old_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True)
+    
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['confirm_password']:
+            raise serializers.ValidationError({'confirm_password': 'Las contraseñas no coinciden.'})
+        return attrs
