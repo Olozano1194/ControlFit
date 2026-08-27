@@ -89,9 +89,8 @@ const DemoRequestsPage = () => {
         );
     };
 
-    const { mutate: toggleEstado } = useMutation({
-        mutationFn: ({ id, estado }: { id: number; estado: 'pendiente' | 'contactado' }) =>
-            updateDemoRequestEstado(id, estado),
+    const { mutate: toggleEstado } = useMutation<DemoRequest, Error, { id: number; estado: 'pendiente' | 'contactado' }>({
+        mutationFn: ({ id, estado }) => updateDemoRequestEstado(id, estado),
         onMutate: async ({ id }) => {
             // Optimistic UI: loading state en badge
             setLoadingIds(prev => new Set(prev).add(id));
@@ -123,7 +122,7 @@ const DemoRequestsPage = () => {
                 toast.success(`Estado actualizado: la solicitud ahora está ${estado === 'contactado' ? 'contactada' : 'pendiente'}.`);
             }
         },
-        onError: (error: any, { id, estado }) => {
+        onError: (error: { response?: { data?: Record<string, string[]> }; message?: string }, { id }) => {
             setLoadingIds(prev => {
                 const next = new Set(prev);
                 next.delete(id);
@@ -139,7 +138,9 @@ const DemoRequestsPage = () => {
             }
 
             // Error genérico
-            toast.error(response?.detail || error.message || 'No se pudo cambiar el estado');
+            const detailMsg = response?.detail;
+            const genericMsg = Array.isArray(detailMsg) ? detailMsg[0] : (detailMsg as string | undefined);
+            toast.error(genericMsg || error.message || 'No se pudo cambiar el estado');
         },
     });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, act, within } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
@@ -90,8 +90,8 @@ describe('DemoRequestsPage', () => {
     });
 
     it('shows loading state on badge click during mutation', async () => {
-        let resolveMutation: (value: any) => void;
-        const mutationPromise = new Promise((resolve) => {
+        let resolveMutation: (value: unknown) => void;
+        const mutationPromise = new Promise<unknown>((resolve) => {
             resolveMutation = resolve;
         });
         (demoRequestsApi.updateDemoRequestEstado as vi.Mock).mockReturnValue(mutationPromise);
@@ -278,8 +278,8 @@ describe('DemoRequestsPage', () => {
     });
 
     it('prevents double-click during loading state', async () => {
-        let resolveMutation: (value: any) => void;
-        const mutationPromise = new Promise((resolve) => {
+        let resolveMutation: (value: unknown) => void;
+        const mutationPromise = new Promise<unknown>((resolve) => {
             resolveMutation = resolve;
         });
         (demoRequestsApi.updateDemoRequestEstado as vi.Mock).mockReturnValue(mutationPromise);
