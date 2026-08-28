@@ -30,17 +30,24 @@ class Command(BaseCommand):
                 )
             )
             self.stdout.write('   Configura en Render: SUPERADMIN_EMAIL=tu@email.com SUPERADMIN_PASSWORD=tu_password')
-            return
+            self.stdout.write('   Variables actuales: SUPERADMIN_EMAIL=%s SUPERADMIN_PASSWORD=%s' % (
+                'SET' if superadmin_email else 'MISSING',
+                'SET' if superadmin_password else 'MISSING'
+            ))
+            import sys
+            sys.exit(1)
 
         # Validar formato de email basico
         if '@' not in superadmin_email:
             self.stdout.write(self.style.ERROR('[ERROR] SUPERADMIN_EMAIL no tiene formato valido'))
-            return
+            import sys
+            sys.exit(1)
 
         # Validar fortaleza minima de contrasena
         if len(superadmin_password) < 8:
             self.stdout.write(self.style.ERROR('[ERROR] SUPERADMIN_PASSWORD debe tener al menos 8 caracteres'))
-            return
+            import sys
+            sys.exit(1)
 
         with transaction.atomic():
             # 1. Verificar si ya existe superadmin con ese email
