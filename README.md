@@ -305,11 +305,42 @@ DEBUG=True
 DATABASE_URL=postgres://user:password@localhost:5432/gimnasio
 ALLOWED_HOSTS=localhost,127.0.0.1
 
-# Datos semilla del entorno demo (opcional)
-DEMO_ADMIN_EMAIL=
-DEMO_ADMIN_PASSWORD=
-DEMO_ADMIN_NAME=
-DEMO_ADMIN_LASTNAME=
+# ===========================================
+# ADMIN DE DEMO (Portfolio/Reclutadores)
+# Se crea automáticamente al iniciar servidor (apps.py)
+# TIENE gimnasio asignado (Gimnasio Principal)
+# ===========================================
+DEMO_ADMIN_EMAIL=reclutador@gimnasio.com
+DEMO_ADMIN_PASSWORD=Gimnasio2026!
+DEMO_ADMIN_NAME=Recruiter
+DEMO_ADMIN_LASTNAME=Demo
+
+# ===========================================
+# SUPERADMIN DE PLATAFORMA (Global - tu usuario)
+# Gestiona TODA la plataforma: demo requests, gimnasios, usuarios
+# NO tiene gimnasio asignado (gimnasio=NULL)
+# Se crea con: python manage.py create_superadmin
+# Configura en Render y ejecuta en start.sh
+# ===========================================
+SUPERADMIN_EMAIL=tu-email@ejemplo.com
+SUPERADMIN_PASSWORD=TuPasswordSuperSegura123!
+SUPERADMIN_NAME=Super
+SUPERADMIN_LASTNAME=Admin
+
+# ===========================================
+# ADMIN DE GIMNASIO (Producción - por gimnasio)
+# Gestiona UN gimnasio específico
+# TIENE gimnasio asignado
+# Se crea con: python manage.py create_production_admin
+# Configura en Render y ejecuta en start.sh
+# ===========================================
+ADMIN_EMAIL=admin@tugimnasio.com
+ADMIN_PASSWORD=TuPasswordGym123!
+ADMIN_NAME=Admin
+ADMIN_LASTNAME=Gimnasio
+ADMIN_GIMNASIO_NAME=Mi Gimnasio
+ADMIN_GIMNASIO_ADDRESS=Dirección del gimnasio
+ADMIN_GIMNASIO_PHONE=3001234567
 
 # Número para enlaces de WhatsApp (opcional)
 WHATSAPP_NUMBER=
