@@ -13,12 +13,12 @@ python manage.py migrate --noinput
 # 2. Crear superadmin de plataforma (idempotente: verifica si existe por email)
 # SIN gimnasio asignado - gestiona toda la plataforma
 echo "--- Verificando/Creando superadmin de plataforma ---"
-python manage.py create_superadmin || true
+python manage.py create_superadmin
 
 # 3. Crear admin de gimnasio (idempotente: verifica si existe por email)
 # CON gimnasio asignado - gestiona un gimnasio especifico
 echo "--- Verificando/Creando admin de gimnasio ---"
-python manage.py create_production_admin || true
+python manage.py create_production_admin
 
 # 4. Collectstatic (idempotente)
 echo "--- Recopilando estaticos ---"

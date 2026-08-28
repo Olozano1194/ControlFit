@@ -31,17 +31,24 @@ class Command(BaseCommand):
                 )
             )
             self.stdout.write('   Configura en Render: ADMIN_EMAIL=tu@email.com ADMIN_PASSWORD=tu_password')
-            return
+            self.stdout.write('   Variables actuales: ADMIN_EMAIL=%s ADMIN_PASSWORD=%s' % (
+                'SET' if admin_email else 'MISSING',
+                'SET' if admin_password else 'MISSING'
+            ))
+            import sys
+            sys.exit(1)
 
         # Validar formato de email basico
         if '@' not in admin_email:
             self.stdout.write(self.style.ERROR('[ERROR] ADMIN_EMAIL no tiene formato valido'))
-            return
+            import sys
+            sys.exit(1)
 
         # Validar fortaleza minima de contrasena
         if len(admin_password) < 8:
             self.stdout.write(self.style.ERROR('[ERROR] ADMIN_PASSWORD debe tener al menos 8 caracteres'))
-            return
+            import sys
+            sys.exit(1)
 
         with transaction.atomic():
             # 1. Crear u obtener el gimnasio
