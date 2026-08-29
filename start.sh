@@ -10,15 +10,15 @@ echo "=== Iniciando aplicacion ==="
 echo "--- Aplicando migraciones ---"
 python manage.py migrate --noinput
 
-# 2. Crear superadmin de plataforma (idempotente: verifica si existe por email)
+# 2. Crear superadmin de plataforma (idempotente: solo crea si no existe)
 # SIN gimnasio asignado - gestiona toda la plataforma
 echo "--- Verificando/Creando superadmin de plataforma ---"
-python manage.py create_superadmin --force || echo "[WARN] create_superadmin falló (ver logs arriba), continuando..."
+python manage.py create_superadmin || echo "[WARN] create_superadmin falló (ver logs arriba), continuando..."
 
-# 3. Crear admin de gimnasio (idempotente: verifica si existe por email)
+# 3. Crear admin de gimnasio (idempotente: solo crea si no existe)
 # CON gimnasio asignado - gestiona un gimnasio especifico
 echo "--- Verificando/Creando admin de gimnasio ---"
-python manage.py create_production_admin --force || echo "[WARN] create_production_admin falló (ver logs arriba), continuando..."
+python manage.py create_production_admin || echo "[WARN] create_production_admin falló (ver logs arriba), continuando..."
 
 # 4. Collectstatic (idempotente)
 echo "--- Recopilando estaticos ---"
