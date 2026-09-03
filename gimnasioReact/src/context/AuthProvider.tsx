@@ -76,9 +76,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         must_change_password: data.user.must_change_password
       };
       
-      // Si must_change_password y NO estamos en /cambiar-password/ → redirect
+      // Si must_change_password y NO estamos en /cambiar-password → redirect
       if (authUser.must_change_password && !window.location.pathname.includes('/cambiar-password')) {
-        window.location.href = '/cambiar-password/';
+        window.location.href = '/cambiar-password';
         return null;
       }
       

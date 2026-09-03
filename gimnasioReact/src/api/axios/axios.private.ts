@@ -88,7 +88,7 @@ axiosPrivate.interceptors.response.use(
     if (error.response?.status === 403 && error.response?.data?.code === 'PASSWORD_CHANGE_REQUIRED') {
       // Solo redirect si no estamos ya en la página de cambio
       if (!window.location.pathname.includes('/cambiar-password')) {
-        window.location.href = '/cambiar-password/';
+        window.location.href = '/cambiar-password';
       }
       return Promise.reject(error);
     }
