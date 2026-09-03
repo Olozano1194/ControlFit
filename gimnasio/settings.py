@@ -244,6 +244,9 @@ WHATSAPP_NUMBER = os.environ.get('WHATSAPP_NUMBER', '573001234567')
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'ControlFit <noreply@controlfit.app>')
 
+# Resend HTTP API (funciona en Render free, local, cualquier lado)
+RESEND_API_KEY = os.getenv('RESEND_API_KEY')
+
 # Prod SMTP (opcional, via env vars)
 # EMAIL_HOST = os.getenv('EMAIL_HOST')
 # EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))

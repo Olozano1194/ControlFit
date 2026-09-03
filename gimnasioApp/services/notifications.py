@@ -32,6 +32,10 @@ class NotificationManager:
         Es idempotente: si la notificación ya existe (misma clave de unicidad),
         get_or_create devuelve la fila existente y no crea una nueva.
         """
+        # Superadmin no tiene gimnasio asignado -> no hay notificaciones que generar
+        if gimnasio is None:
+            return
+
         today = date.today()
         three_day_later = today + timedelta(days=3)
 
