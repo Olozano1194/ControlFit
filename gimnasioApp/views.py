@@ -556,7 +556,9 @@ class NotificationViewSet(MultiTenantViewSetMixin, viewsets.ReadOnlyModelViewSet
 
     def list(self, request, *args, **kwargs):
         # Generación perezosa e idempotente antes de responder
-        NotificationManager.generate_for_gimnasio(request.gimnasio)
+        # Solo generar si hay gimnasio (superadmin no tiene gimnasio)
+        if request.gimnasio:
+            NotificationManager.generate_for_gimnasio(request.gimnasio)
         return super().list(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'], url_path='marcar-leida')
