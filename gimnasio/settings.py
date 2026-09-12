@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 import os
+import sys
 import dj_database_url
 from dotenv import load_dotenv
 load_dotenv()  # cargamos las variables de entorno desde .env
@@ -96,25 +97,36 @@ WSGI_APPLICATION = 'gimnasio.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+# Use SQLite in-memory for tests (fast, no external dependencies)
+# Check if running tests via manage.py test or pytest
+_is_testing = 'test' in sys.argv or 'pytest' in sys.argv[0] if sys.argv else False
 
-DATABASES = {
-    # 'default': {
-    #     'ENGINE': 'django.db.backends.mysql',
-    #     'NAME': 'gimnasioreact',
-    #     'USER': 'root',
-    #     'PASSWORD': '123456',
-    #     'HOST': 'localhost',
-    #     'PORT': '3306'
-        
-    # }
-    # Replace the SQLite DATABASES configuration with PostgreSQL:
-    'default': dj_database_url.config(
-        # Replace this value with your local database's connection string.
+if _is_testing:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': ':memory:',
+        }
+    }
+else:
+    # Base database config from DATABASE_URL (or default for CI)
+    _db_config = dj_database_url.config(
         default=os.getenv('DATABASE_URL'),
         conn_max_age=600,
-        ssl_require=not os.getenv('DEBUG', 'True') == 'True'       
+        ssl_require=not os.getenv('DEBUG', 'True') == 'True'
     )
-}
+    
+    # Test database: SQLite in-memory for fast local and CI tests
+    # This overrides the engine only for test runs
+    if 'TEST' not in _db_config:
+        _db_config['TEST'] = {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': ':memory:',
+        }
+    
+    DATABASES = {
+        'default': _db_config
+    }
 
 
 # Password validation
