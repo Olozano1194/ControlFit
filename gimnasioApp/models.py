@@ -7,6 +7,20 @@ from django.db.models import Sum
 
 
 # ============================================================
+# ACTIVE MANAGER - Filters is_active=True by default
+# ============================================================
+class ActiveManager(models.Manager):
+    """Manager that filters to only active records (is_active=True) by default."""
+    
+    def get_queryset(self):
+        return super().get_queryset().filter(is_active=True)
+    
+    def get_by_natural_key(self, email):
+        """Required for Django authentication backend to work with custom User model."""
+        return self.get_queryset().get(email=email)
+
+
+# ============================================================
 # MODELO GIMNASIO - Para multi-tenant
 # ============================================================
 class Gimnasio(models.Model):
@@ -15,7 +29,12 @@ class Gimnasio(models.Model):
     address = models.CharField(max_length=200, blank=True, default='')
     phone = models.CharField(max_length=20, blank=True, default='')
     is_active = models.BooleanField(default=True)
+    country_code = models.CharField(max_length=5, default='57', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Managers: objects filters active; all_objects returns all
+    objects = ActiveManager()
+    all_objects = models.Manager()
     
     class Meta:
         db_table = 'gimnasio'
@@ -72,10 +91,12 @@ class Usuario(AbstractBaseUser):
     # Campo para forzar cambio de contraseña en primer login
     must_change_password = models.BooleanField(default=False)
 
-    #Usamos el UserManager personalizado
-    objects = UserManager()
+    # Usamos ActiveManager como default (filtra is_active=True)
+    # UserManager se mantiene disponible via all_objects para admin/creation
+    objects = ActiveManager()
+    all_objects = UserManager()
 
-    #Se define el campo de autenticación sea el email
+    # Se define el campo de autenticación sea el email
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['name', 'lastname']
 
@@ -179,7 +200,6 @@ class MembresiaAsignada(models.Model):
     dateFinal = models.DateField(editable=False, null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
-    notified_at = models.DateTimeField(null=True, blank=True, help_text="DEPRECADO: ya no es la fuente de verdad para notificaciones. Usar el modelo Notification.")
 
     class Meta:
         verbose_name = 'MembresiaAsignada'
@@ -402,6 +422,7 @@ class DemoRequest(models.Model):
     ESTADOS = (
         ('pendiente', 'Pendiente'),
         ('contactado', 'Contactado'),
+        ('cancelada', 'Cancelada'),
     )
     nombre = models.CharField(max_length=150)
     email = models.EmailField()

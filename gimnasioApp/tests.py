@@ -13,11 +13,11 @@ from unittest.mock import patch, MagicMock, call
 from decimal import Decimal
 from datetime import datetime, timedelta, date, timezone as dt_timezone
 from django.utils import timezone
-from .models import Gimnasio, Usuario, UsuarioGym, Membresia, MembresiaAsignada, PagoMembresia, TipoEvento, EventoCalendario, Notification, DemoRequest
+from .models import Gimnasio, Usuario, UsuarioGym, Membresia, MembresiaAsignada, PagoMembresia, TipoEvento, EventoCalendario, Notification, DemoRequest, ActiveManager
 from .middleware import GimnasioMiddleware
 from .mixins import MultiTenantViewSetMixin
 from .serializers import UsuarioSerializer, UsuarioGymSerializer, MembresiasSerializer, MembresiaAsignadaSerializer, PagoMembresiaSerializer, EventoCalendarioSerializer, DemoRequestSerializer
-from .views import UserViewSet, UsuarioGymViewSet, MembresiaViewSet, Home, PagoMembresiaViewSet, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView, NotificationViewSet, DemoRequestViewSet
+from .views import UserViewSet, UsuarioGymViewSet, MembresiaViewSet, Home, PagoMembresiaViewSet, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView, NotificationViewSet, DemoRequestViewSet, RegisterViewSet, PasswordChangeView, userProfileView, CookieTokenObtainPairView
 from .services.notifications import NotificationManager
 from .storage import SupabaseMediaStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -39,7 +39,7 @@ class GimnasioMiddlewareTest(TestCase):
 
     def test_authenticated_user_gets_gimnasio(self):
         gimnasio = Gimnasio.objects.create(name="Test Gym")
-        user = Usuario.objects.create_user(
+        user = Usuario.all_objects.create_user(
             email="test@example.com",
             name="Test",
             lastname="User",
@@ -60,7 +60,7 @@ class GimnasioMiddlewareTest(TestCase):
     def test_user_without_gimnasio_gets_none(self):
         gimnasio = Gimnasio.objects.create(name="Test Gym 2")
         # Create user with gimnasio first, then test the middleware behavior
-        user = Usuario.objects.create_user(
+        user = Usuario.all_objects.create_user(
             email="nogym@example.com",
             name="No",
             lastname="Gym",
@@ -85,14 +85,14 @@ class MultiTenantViewSetMixinTest(TestCase):
         self.gimnasio1 = Gimnasio.objects.create(name="Gym 1")
         self.gimnasio2 = Gimnasio.objects.create(name="Gym 2")
 
-        self.user1 = Usuario.objects.create_user(
+        self.user1 = Usuario.all_objects.create_user(
             email="user1@example.com",
             name="User",
             lastname="One",
             password="password123",
             gimnasio=self.gimnasio1
         )
-        self.user2 = Usuario.objects.create_user(
+        self.user2 = Usuario.all_objects.create_user(
             email="user2@example.com",
             name="User",
             lastname="Two",
@@ -157,7 +157,7 @@ class MultiTenantViewSetMixinTest(TestCase):
 class UserViewSetCreateTest(TestCase):
     def setUp(self):
         self.gimnasio = Gimnasio.objects.create(name="Test Gym")
-        self.admin = Usuario.objects.create_user(
+        self.admin = Usuario.all_objects.create_user(
             email="admin@example.com",
             name="Admin",
             lastname="User",
@@ -265,7 +265,7 @@ class UsuarioSerializerAvatarTest(TestCase):
 
     def setUp(self):
         self.gimnasio = Gimnasio.objects.create(name="Test Gym")
-        self.user = Usuario.objects.create_user(
+        self.user = Usuario.all_objects.create_user(
             email="test@example.com",
             name="Test",
             lastname="User",
@@ -378,7 +378,7 @@ class AvatarUploadIntegrationTest(TestCase):
 
     def setUp(self):
         self.gimnasio = Gimnasio.objects.create(name="Test Gym")
-        self.user = Usuario.objects.create_user(
+        self.user = Usuario.all_objects.create_user(
             email="test@example.com",
             name="Test",
             lastname="User",
@@ -521,7 +521,7 @@ class PagoMembresiaValidacionTest(TestCase):
         request = factory.post('/')
         from rest_framework.test import force_authenticate
         from .models import Usuario
-        user = Usuario.objects.create_user(
+        user = Usuario.all_objects.create_user(
             email="test@test.com", name="Test", lastname="User",
             password="pass123", gimnasio=self.gimnasio
         )
@@ -548,7 +548,7 @@ class PagoMembresiaValidacionTest(TestCase):
         from .models import Usuario
         factory = APIRequestFactory()
         request = factory.post('/')
-        user = Usuario.objects.create_user(
+        user = Usuario.all_objects.create_user(
             email="test2@test.com", name="Test", lastname="User",
             password="pass123", gimnasio=self.gimnasio
         )
@@ -574,7 +574,7 @@ class PagoMembresiaValidacionTest(TestCase):
         from .models import Usuario
         factory = APIRequestFactory()
         request = factory.post('/')
-        user = Usuario.objects.create_user(
+        user = Usuario.all_objects.create_user(
             email="test3@test.com", name="Test", lastname="User",
             password="pass123", gimnasio=self.gimnasio
         )
@@ -661,7 +661,7 @@ class PagoMembresiaIntegracionTest(TestCase):
 
     def setUp(self):
         self.gimnasio = Gimnasio.objects.create(name="Test Gym")
-        self.user = Usuario.objects.create_user(
+        self.user = Usuario.all_objects.create_user(
             email="admin@gym.com", name="Admin", lastname="User",
             password="pass123", roles="admin", gimnasio=self.gimnasio
         )
@@ -739,7 +739,7 @@ class HomeDashboardPagosTest(TestCase):
 
     def setUp(self):
         self.gimnasio = Gimnasio.objects.create(name="Test Gym")
-        self.user = Usuario.objects.create_user(
+        self.user = Usuario.all_objects.create_user(
             email="admin@gym.com", name="Admin", lastname="User",
             password="pass123", roles="admin", gimnasio=self.gimnasio
         )
@@ -1173,7 +1173,7 @@ class EventoCalendarioModelTest(TestCase):
         self.tipo = TipoEvento.objects.create(
             nombre="Clase", color="#FF0000", gimnasio=self.gimnasio
         )
-        self.user = Usuario.objects.create_user(
+        self.user = Usuario.all_objects.create_user(
             email="cal-model@example.com", name="Cal", lastname="Model",
             password="password123", roles="admin", gimnasio=self.gimnasio
         )
@@ -1213,15 +1213,15 @@ class TipoEventoViewSetTest(TestCase):
     def setUp(self):
         self.gimnasio1 = Gimnasio.objects.create(name="Gym 1")
         self.gimnasio2 = Gimnasio.objects.create(name="Gym 2")
-        self.admin1 = Usuario.objects.create_user(
+        self.admin1 = Usuario.all_objects.create_user(
             email="admin1@example.com", name="A", lastname="One",
             password="password123", roles="admin", gimnasio=self.gimnasio1
         )
-        self.admin2 = Usuario.objects.create_user(
+        self.admin2 = Usuario.all_objects.create_user(
             email="admin2@example.com", name="A", lastname="Two",
             password="password123", roles="admin", gimnasio=self.gimnasio2
         )
-        self.recepcion1 = Usuario.objects.create_user(
+        self.recepcion1 = Usuario.all_objects.create_user(
             email="rec1@example.com", name="R", lastname="One",
             password="password123", roles="recepcion", gimnasio=self.gimnasio1
         )
@@ -1303,11 +1303,11 @@ class EventoCalendarioViewSetTest(TestCase):
     def setUp(self):
         self.gimnasio1 = Gimnasio.objects.create(name="Gym 1")
         self.gimnasio2 = Gimnasio.objects.create(name="Gym 2")
-        self.recepcion1 = Usuario.objects.create_user(
+        self.recepcion1 = Usuario.all_objects.create_user(
             email="rec1@example.com", name="R", lastname="One",
             password="password123", roles="recepcion", gimnasio=self.gimnasio1
         )
-        self.user2 = Usuario.objects.create_user(
+        self.user2 = Usuario.all_objects.create_user(
             email="user2@example.com", name="U", lastname="Two",
             password="password123", roles="admin", gimnasio=self.gimnasio2
         )
@@ -1463,7 +1463,7 @@ class RangeFilterTest(TestCase):
 
     def setUp(self):
         self.gimnasio = Gimnasio.objects.create(name="Gym 1")
-        self.user = Usuario.objects.create_user(
+        self.user = Usuario.all_objects.create_user(
             email="rec@example.com", name="R", lastname="One",
             password="password123", roles="recepcion", gimnasio=self.gimnasio
         )
@@ -1737,19 +1737,19 @@ class NotificationViewSetTest(TestCase):
     def setUp(self):
         self.gimnasio1 = Gimnasio.objects.create(name="Gym 1")
         self.gimnasio2 = Gimnasio.objects.create(name="Gym 2")
-        self.admin1 = Usuario.objects.create_user(
+        self.admin1 = Usuario.all_objects.create_user(
             email="admin1@example.com", name="A", lastname="One",
             password="password123", roles="admin", gimnasio=self.gimnasio1
         )
-        self.rec1 = Usuario.objects.create_user(
+        self.rec1 = Usuario.all_objects.create_user(
             email="rec1@example.com", name="R", lastname="One",
             password="password123", roles="recepcion", gimnasio=self.gimnasio1
         )
-        self.no_staff = Usuario.objects.create_user(
+        self.no_staff = Usuario.all_objects.create_user(
             email="nope@example.com", name="N", lastname="Ope",
             password="password123", roles="cliente", gimnasio=self.gimnasio1
         )
-        self.user2 = Usuario.objects.create_user(
+        self.user2 = Usuario.all_objects.create_user(
             email="user2@example.com", name="U", lastname="Two",
             password="password123", roles="admin", gimnasio=self.gimnasio2
         )
@@ -1927,7 +1927,7 @@ class NotificationViewSetTest(TestCase):
 
 def _make_staff_user(gimnasio, email="admin@example.com", password="secret"):
     """Crea un usuario staff (admin) para los tests de auth."""
-    return Usuario.objects.create_user(
+    return Usuario.all_objects.create_user(
         email=email,
         name="Admin",
         lastname="User",
@@ -2210,7 +2210,7 @@ class PlatformDashboardTest(TestCase):
         User = get_user_model()
 
         # Crear superadmin
-        self.superadmin = User.objects.create_user(
+        self.superadmin = User.all_objects.create_user(
             email='superadmin@test.com',
             password='TestPass123',
             name='Super',
@@ -2225,7 +2225,7 @@ class PlatformDashboardTest(TestCase):
         self.gym3 = Gimnasio.objects.create(name='Gym Gamma', address='Calle 3', phone='3007778899', is_active=False)
 
         # Admin de gym1
-        self.admin1 = User.objects.create_user(
+        self.admin1 = User.all_objects.create_user(
             email='admin1@test.com',
             password='TestPass123',
             name='Admin',
@@ -2235,7 +2235,7 @@ class PlatformDashboardTest(TestCase):
         )
 
         # Recepcionista de gym2
-        self.recep2 = User.objects.create_user(
+        self.recep2 = User.all_objects.create_user(
             email='recep2@test.com',
             password='TestPass123',
             name='Recep',
@@ -2322,7 +2322,7 @@ class PlatformDashboardTest(TestCase):
         self.assertEqual(data['demo_contactados'], 1)
         self.assertEqual(data['ingresos_mes_global'], '335000.00')
         self.assertEqual(data['miembros_activos_global'], 2)
-        self.assertEqual(data['retencion_promedio'], '100.0')
+        self.assertEqual(data['retencion_promedio'], 100.0)
 
     def test_pagination_default_20_max_100(self):
         """Paginación: default 20, max 100."""
@@ -2410,7 +2410,7 @@ class AutoCrearGymDesdeDemoPhase1Test(TestCase):
         """Usuario tiene campo must_change_password BooleanField(default=False)."""
         from gimnasioApp.models import Usuario
         
-        user = Usuario.objects.create_user(
+        user = Usuario.all_objects.create_user(
             email='test@user.com',
             password='password123',
             name='Test',
@@ -2573,7 +2573,7 @@ class OnboardingServiceTest(TestCase):
         from django.core.exceptions import ValidationError
         
         # Crear usuario existente con ese email
-        Usuario.objects.create_user(
+        Usuario.all_objects.create_user(
             email='existente@gym.com',
             password='password123',
             name='Existente',
@@ -2667,7 +2667,7 @@ class DemoRequestViewSetIntegrationTest(TestCase):
         self.factory = APIRequestFactory()
         
         # Superadmin user (no gym required)
-        self.superadmin = Usuario.objects.create_user(
+        self.superadmin = Usuario.all_objects.create_user(
             email='super@admin.com',
             password='password123',
             name='Super',
@@ -2678,7 +2678,7 @@ class DemoRequestViewSetIntegrationTest(TestCase):
         
         # Regular admin user (with gym)
         self.gym = Gimnasio.objects.create(name="Test Gym")
-        self.admin_user = Usuario.objects.create_user(
+        self.admin_user = Usuario.all_objects.create_user(
             email='admin@gym.com',
             password='password123',
             name='Admin',
@@ -2807,7 +2807,7 @@ class DemoRequestViewSetIntegrationTest(TestCase):
         from gimnasioApp.models import DemoRequest, Usuario
         
         # Usuario existente
-        Usuario.objects.create_user(
+        Usuario.all_objects.create_user(
             email='duplicado@gym.com',
             password='password123',
             name='Existente',
@@ -2879,7 +2879,7 @@ class EmailServiceTest(TestCase):
 
     def setUp(self):
         self.gimnasio = Gimnasio.objects.create(name="Test Gym")
-        self.admin = Usuario.objects.create_user(
+        self.admin = Usuario.all_objects.create_user(
             email="admin@test.com",
             name="Admin",
             lastname="User",
@@ -3031,7 +3031,7 @@ class DemoRequestViewSetEmailIntegrationTest(TransactionTestCase):
 
     def setUp(self):
         self.gimnasio = Gimnasio.objects.create(name="Test Gym")
-        self.superadmin = Usuario.objects.create_user(
+        self.superadmin = Usuario.all_objects.create_user(
             email="super@test.com",
             name="Super",
             lastname="Admin",
@@ -3094,7 +3094,7 @@ class PasswordChangeSerializerTest(TestCase):
 
     def setUp(self):
         self.gym = Gimnasio.objects.create(name="Test Gym")
-        self.user = Usuario.objects.create_user(
+        self.user = Usuario.all_objects.create_user(
             email='test@gym.com',
             password='TempPass123',
             name='Test',
@@ -3157,7 +3157,7 @@ class PasswordChangeViewTest(TestCase):
 
     def setUp(self):
         self.gym = Gimnasio.objects.create(name="Test Gym")
-        self.user = Usuario.objects.create_user(
+        self.user = Usuario.all_objects.create_user(
             email='test@gym.com',
             password='TempPass123',
             name='Test',
@@ -3263,7 +3263,7 @@ class PasswordChangeViewTest(TestCase):
     def test_password_change_user_without_flag_still_works(self):
         """User without must_change_password=True can still change password."""
         # Create a fresh user without the flag to avoid interference from previous tests
-        fresh_user = Usuario.objects.create_user(
+        fresh_user = Usuario.all_objects.create_user(
             email='fresh@gym.com',
             password='TempPass123',
             name='Fresh',
@@ -3293,7 +3293,7 @@ class RequirePasswordChangePermissionTest(TestCase):
 
     def setUp(self):
         self.gym = Gimnasio.objects.create(name="Test Gym")
-        self.user_with_flag = Usuario.objects.create_user(
+        self.user_with_flag = Usuario.all_objects.create_user(
             email='withflag@gym.com',
             password='TempPass123',
             name='With',
@@ -3304,7 +3304,7 @@ class RequirePasswordChangePermissionTest(TestCase):
         self.user_with_flag.must_change_password = True
         self.user_with_flag.save()
         
-        self.user_without_flag = Usuario.objects.create_user(
+        self.user_without_flag = Usuario.all_objects.create_user(
             email='withoutflag@gym.com',
             password='NormalPass123',
             name='Without',
@@ -3378,3 +3378,474 @@ class RequirePasswordChangePermissionTest(TestCase):
         view = MockView()
         
         self.assertTrue(perm.has_permission(request, view))
+
+
+# ============================================================
+# PHASE 1 CORE HARDENING — TESTS (Work Unit 1)
+# ============================================================
+
+class Phase1CoreHardeningTest(TestCase):
+    """Tests for Phase 1 Core Hardening: SQLite CI, retencion_promedio fix, notified_at removal."""
+
+    def test_settings_has_sqlite_test_database(self):
+        """1.2: RED - Assert TEST database uses SQLite in-memory engine."""
+        from django.conf import settings
+        from django.db import connection
+        
+        # When running tests, Django uses SQLite in-memory database
+        # Check that the test database engine is SQLite
+        self.assertEqual(connection.vendor, 'sqlite')
+        # The main DATABASES config should have SQLite engine during tests
+        self.assertEqual(settings.DATABASES['default']['ENGINE'], 'django.db.backends.sqlite3')
+        # The test database name should be in-memory
+        self.assertIn('memory', settings.DATABASES['default']['NAME'])
+
+    def test_platform_stats_serializer_returns_number_for_retencion_promedio(self):
+        """2.2: RED - Assert retencion_promedio is a number (int/float), not string."""
+        from gimnasioApp.serializers import PlatformStatsSerializer
+        from decimal import Decimal
+        
+        # Create mock data
+        data = {
+            'total_gimnasios': 10,
+            'gimnasios_activos': 8,
+            'total_usuarios_staff': 25,
+            'demo_pendientes': 3,
+            'demo_contactados': 7,
+            'ingresos_mes_global': Decimal('1000000.00'),
+            'miembros_activos_global': 500,
+            'retencion_promedio': Decimal('75.5'),
+        }
+        serializer = PlatformStatsSerializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        validated = serializer.validated_data
+        
+        # The key test: retencion_promedio should be a number, not string
+        self.assertIsInstance(validated['retencion_promedio'], (int, float, Decimal))
+        # Explicitly check it's NOT a string
+        self.assertNotIsInstance(validated['retencion_promedio'], str)
+
+    def test_membresia_asignada_has_no_notified_at_attribute(self):
+        """3.2: RED - Assert MembresiaAsignada model has no notified_at attribute."""
+        from gimnasioApp.models import MembresiaAsignada
+        
+        # Check that the model class doesn't have notified_at as a field
+        field_names = [f.name for f in MembresiaAsignada._meta.get_fields()]
+        self.assertNotIn('notified_at', field_names)
+        
+        # Also verify it's not an attribute on instances
+        self.assertFalse(hasattr(MembresiaAsignada, 'notified_at'))
+
+
+# ============================================================
+# PHASE 1 CORE HARDENING — WORK UNIT 2 TESTS (Tasks 4-5)
+# ============================================================
+
+class ActiveManagerTest(TestCase):
+    """Tests for Task 4: ActiveManager filtering is_active=True by default."""
+    
+    def setUp(self):
+        self.gym_active = Gimnasio.objects.create(name="Active Gym")
+        self.gym_inactive = Gimnasio.all_objects.create(name="Inactive Gym", is_active=False)
+        
+        self.user_active = Usuario.all_objects.create_user(
+            email="active@test.com", name="Active", lastname="User",
+            password="password123", gimnasio=self.gym_active
+        )
+        self.user_inactive = Usuario.all_objects.create_user(
+            email="inactive@test.com", name="Inactive", lastname="User",
+            password="password123", gimnasio=self.gym_active, is_active=False
+        )
+
+    def test_gimnasio_objects_excludes_inactive(self):
+        """4.4: RED - Gimnasio.objects.all() should exclude inactive gyms."""
+        active_gyms = list(Gimnasio.objects.all())
+        self.assertEqual(len(active_gyms), 1)
+        self.assertEqual(active_gyms[0].name, "Active Gym")
+
+    def test_gimnasio_all_objects_returns_all(self):
+        """4.4: RED - Gimnasio.all_objects.all() should return all gyms."""
+        all_gyms = list(Gimnasio.all_objects.all())
+        self.assertEqual(len(all_gyms), 2)
+        names = {g.name for g in all_gyms}
+        self.assertEqual(names, {"Active Gym", "Inactive Gym"})
+
+    def test_usuario_objects_excludes_inactive(self):
+        """4.4: RED - Usuario.objects.all() should exclude inactive users."""
+        active_users = list(Usuario.objects.all())
+        self.assertEqual(len(active_users), 1)
+        self.assertEqual(active_users[0].email, "active@test.com")
+
+    def test_usuario_all_objects_returns_all(self):
+        """4.4: RED - Usuario.all_objects.all() should return all users."""
+        all_users = list(Usuario.all_objects.all())
+        self.assertEqual(len(all_users), 2)
+        emails = {u.email for u in all_users}
+        self.assertEqual(emails, {"active@test.com", "inactive@test.com"})
+
+    def test_active_manager_filters_queryset(self):
+        """4.1: ActiveManager.get_queryset() filters is_active=True."""
+        qs = Gimnasio.objects.get_queryset()
+        self.assertEqual(qs.count(), 1)
+        self.assertEqual(qs.first().name, "Active Gym")
+
+    def test_authenticate_fails_for_inactive_user(self):
+        """Integration: authenticate() returns None for inactive user."""
+        from django.contrib.auth import authenticate
+        user = authenticate(username="inactive@test.com", password="password123")
+        self.assertIsNone(user)
+
+
+class GimnasioCountryCodeTest(TestCase):
+    """Tests for Task 5: Gym Country Code field and WhatsApp link generation."""
+    
+    def test_gimnasio_country_code_default_is_57(self):
+        """5.2: RED - Gimnasio.country_code defaults to '57'."""
+        gym = Gimnasio.objects.create(name="Test Gym")
+        self.assertEqual(gym.country_code, '57')
+
+    def test_gimnasio_country_code_custom_preserved(self):
+        """5.2: RED - Custom country_code is preserved."""
+        gym = Gimnasio.objects.create(name="US Gym", country_code='1')
+        self.assertEqual(gym.country_code, '1')
+
+    def test_gimnasio_country_code_blank_allowed(self):
+        """5.1: country_code field allows blank."""
+        gym = Gimnasio.objects.create(name="Blank Code Gym", country_code='')
+        self.assertEqual(gym.country_code, '')
+
+    def test_whatsapp_link_uses_default_country_code(self):
+        """5.7: RED - WhatsApp link uses default country code '57' when not provided."""
+        link = NotificationManager._construir_whatsapp_link(
+            phone='3001234567', 
+            wa_message='Test message'
+        )
+        self.assertIsNotNone(link)
+        self.assertTrue(link.startswith('https://wa.me/573001234567?text=Test message'))
+
+    def test_whatsapp_link_uses_custom_country_code(self):
+        """5.7: RED - WhatsApp link uses provided country code."""
+        link = NotificationManager._construir_whatsapp_link(
+            phone='3001234567', 
+            wa_message='Test message',
+            country_code='1'
+        )
+        self.assertIsNotNone(link)
+        self.assertTrue(link.startswith('https://wa.me/13001234567?text=Test message'))
+
+    def test_whatsapp_link_with_existing_prefix_no_duplicate(self):
+        """5.7: RED - WhatsApp link doesn't duplicate prefix if phone already has it."""
+        link = NotificationManager._construir_whatsapp_link(
+            phone='573001234567',  # Already has 57 prefix
+            wa_message='Test message',
+            country_code='57'
+        )
+        self.assertIsNotNone(link)
+        self.assertTrue(link.startswith('https://wa.me/573001234567?text=Test message'))
+        # Ensure no double prefix
+        self.assertNotIn('5757', link)
+
+    def test_whatsapp_link_none_for_empty_phone(self):
+        """5.7: WhatsApp link returns None for empty phone."""
+        link = NotificationManager._construir_whatsapp_link(
+            phone='', 
+            wa_message='Test message'
+        )
+        self.assertIsNone(link)
+        
+        link = NotificationManager._construir_whatsapp_link(
+            phone=None, 
+            wa_message='Test message'
+        )
+        self.assertIsNone(link)
+
+    def test_notification_crear_membresia_uses_gimnasio_country_code(self):
+        """5.6: _crear_membresia passes gimnasio.country_code to WhatsApp link."""
+        from datetime import date, timedelta
+        from .models import Membresia, UsuarioGym, MembresiaAsignada
+        
+        gimnasio = Gimnasio.objects.create(name="Test Gym", country_code='1')
+        miembro = UsuarioGym.objects.create(name="Juan", lastname="Perez", gimnasio=gimnasio)
+        membresia = Membresia.objects.create(name="Plan Test", price=50000, duration=30, gimnasio=gimnasio)
+        
+        membership = MembresiaAsignada.objects.create(
+            miembro=miembro,
+            membresia=membresia,
+            dateInitial=date.today()
+        )
+        
+        with patch.object(NotificationManager, '_construir_whatsapp_link') as mock_link:
+            mock_link.return_value = 'https://wa.me/13001234567?text=test'
+            
+            NotificationManager._crear_membresia(gimnasio, membership, 'por_vencer', date.today())
+            
+            # Verify _construir_whatsapp_link was called with gimnasio.country_code
+            mock_link.assert_called_once()
+            args, kwargs = mock_link.call_args
+            self.assertEqual(args[0], miembro.phone)
+            self.assertEqual(args[2], '1')  # country_code from gimnasio
+
+
+class PlatformStatsViewDoubleFilterTest(TestCase):
+    """Tests to verify PlatformStatsView doesn't double-filter is_active (Task 4.7)."""
+    
+    def setUp(self):
+        self.gym_active = Gimnasio.objects.create(name="Active Gym")
+        self.gym_inactive = Gimnasio.all_objects.create(name="Inactive Gym", is_active=False)
+        
+        self.superadmin = Usuario.all_objects.create_user(
+            email="super@test.com", name="Super", lastname="Admin",
+            password="password123", roles="superadmin", gimnasio=None
+        )
+        self.factory = APIRequestFactory()
+
+    def test_platform_stats_counts_correctly(self):
+        """4.7: PlatformStatsView should use all_objects for total, objects for active."""
+        from gimnasioApp.views import PlatformStatsView
+        
+        view = PlatformStatsView.as_view()
+        request = self.factory.get('/platform/stats/')
+        request.user = self.superadmin
+        request.gimnasio = None
+        force_authenticate(request, user=self.superadmin)
+        
+        response = view(request)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        data = response.data
+        # total_gimnasios should be 2 (all gyms)
+        self.assertEqual(data['total_gimnasios'], 2)
+        # gimnasios_activos should be 1 (only active)
+        self.assertEqual(data['gimnasios_activos'], 1)
+
+
+class RegisterViewSetDocstringTest(TestCase):
+    """Tests for RegisterViewSet security audit docstring (Task 6)."""
+
+    def test_register_viewset_has_intentional_docstring(self):
+        """6.2: RED - RegisterViewSet.__doc__ must contain 'INTENTIONAL' flag."""
+        self.assertIn('INTENTIONAL', RegisterViewSet.__doc__)
+
+    def test_register_viewset_docstring_covers_threat_model(self):
+        """RegisterViewSet docstring must document threat model: spam, abuse, data exposure."""
+        docstring = RegisterViewSet.__doc__ or ''
+        self.assertIn('Spam', docstring)
+        self.assertIn('Abuse', docstring)
+        self.assertIn('Data exposure', docstring)
+
+    def test_register_viewset_docstring_covers_protections(self):
+        """RegisterViewSet docstring must document protections in place."""
+        docstring = RegisterViewSet.__doc__ or ''
+        self.assertIn('Protections', docstring)
+        self.assertIn('Email uniqueness', docstring)
+        self.assertIn('Password hashing', docstring)
+        self.assertIn('No sensitive data exposed', docstring)
+
+
+class ForcedPasswordChangeE2ETest(TestCase):
+    """E2E tests for forced password change flow (Task 7).
+    
+    Flow: login → 403 (must_change_password) → change password → 200 access restored
+    """
+
+    def setUp(self):
+        self.gimnasio = Gimnasio.objects.create(name="Test Gym")
+        self.factory = APIRequestFactory()
+
+    def _login_get_token(self, email, password):
+        """Helper to login and get JWT access token."""
+        from gimnasioApp.views import CookieTokenObtainPairView
+        view = CookieTokenObtainPairView.as_view()
+        request = self.factory.post('/gym/api/v1/token/', {'email': email, 'password': password}, format='json')
+        response = view(request)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response.data['access']
+
+    def _get_with_token(self, url, access_token):
+        """Helper to make authenticated request with JWT token."""
+        request = self.factory.get(url)
+        request.META['HTTP_AUTHORIZATION'] = f'Bearer {access_token}'
+        return request
+
+    def _change_password(self, access_token, old_password, new_password, confirm_password):
+        """Helper to call password change endpoint."""
+        from gimnasioApp.views import PasswordChangeView
+        view = PasswordChangeView.as_view()
+        data = {
+            'old_password': old_password,
+            'new_password': new_password,
+            'confirm_password': confirm_password
+        }
+        request = self.factory.post('/auth/password/change/', data, format='json')
+        request.META['HTTP_AUTHORIZATION'] = f'Bearer {access_token}'
+        return view(request)
+
+    def test_admin_forced_password_change_flow(self):
+        """7.2: Admin scenario - create user with must_change_password=True, login → 403 → change password → 200."""
+        # Create admin user with must_change_password=True
+        admin = Usuario.all_objects.create_user(
+            email="admin@test.com",
+            name="Admin",
+            lastname="User",
+            password="oldpass123",
+            roles="admin",
+            gimnasio=self.gimnasio,
+            must_change_password=True
+        )
+
+        # Step 1: Login → JWT token
+        access_token = self._login_get_token("admin@test.com", "oldpass123")
+        self.assertIsNotNone(access_token)
+
+        # Step 2: Access protected endpoint → 403 (must_change_password)
+        from gimnasioApp.views import userProfileView
+        view = userProfileView.as_view()
+        request = self._get_with_token('/api/user/', access_token)
+        response = view(request)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # Step 3: POST /auth/password/change/ with old+new password → 200
+        response = self._change_password(access_token, "oldpass123", "newpass123", "newpass123")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('detail', response.data)
+
+        # Step 4: Access protected endpoint → 200 (access restored)
+        request = self._get_with_token('/api/user/', access_token)
+        response = view(request)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('user', response.data)
+
+    def test_recepcion_forced_password_change_flow(self):
+        """7.3: Recepcion scenario - create user with must_change_password=True, login → 403 → change password → 200."""
+        # Create recepcion user with must_change_password=True
+        recepcion = Usuario.all_objects.create_user(
+            email="recepcion@test.com",
+            name="Recepcion",
+            lastname="User",
+            password="oldpass123",
+            roles="recepcion",
+            gimnasio=self.gimnasio,
+            must_change_password=True
+        )
+
+        # Step 1: Login → JWT token
+        access_token = self._login_get_token("recepcion@test.com", "oldpass123")
+        self.assertIsNotNone(access_token)
+
+        # Step 2: Access protected endpoint → 403 (must_change_password)
+        from gimnasioApp.views import userProfileView
+        view = userProfileView.as_view()
+        request = self._get_with_token('/api/user/', access_token)
+        response = view(request)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # Step 3: POST /auth/password/change/ with old+new password → 200
+        response = self._change_password(access_token, "oldpass123", "newpass123", "newpass123")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('detail', response.data)
+
+        # Step 4: Access protected endpoint → 200 (access restored)
+        request = self._get_with_token('/api/user/', access_token)
+        response = view(request)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('user', response.data)
+
+
+class DemoRequestSoftDeleteTest(TestCase):
+    """Tests for DemoRequest soft delete via estado='cancelada' (Task 8)."""
+
+    def setUp(self):
+        self.superadmin = Usuario.all_objects.create_user(
+            email="super@test.com", name="Super", lastname="Admin",
+            password="password123", roles="superadmin", gimnasio=None
+        )
+        self.factory = APIRequestFactory()
+
+    def _make_superadmin_request(self, method, url, data=None, pk=None):
+        """Helper to create authenticated superadmin request."""
+        if method == 'delete':
+            request = self.factory.delete(url)
+        elif method == 'patch':
+            request = self.factory.patch(url, data, format='json')
+        else:
+            request = getattr(self.factory, method)(url, data, format='json') if data else getattr(self.factory, method)(url)
+        request.user = self.superadmin
+        force_authenticate(request, user=self.superadmin)
+        return request
+
+    def test_destroy_sets_estado_cancelada(self):
+        """8.5: RED - destroy() sets estado='cancelada' and record persists in DB."""
+        demo = DemoRequest.objects.create(
+            nombre="Test Demo", email="demo@test.com", telefono="3001234567",
+            nombre_gimnasio="Test Gym", estado='pendiente'
+        )
+        
+        from gimnasioApp.views import DemoRequestViewSet
+        view = DemoRequestViewSet.as_view({'delete': 'destroy'})
+        request = self._make_superadmin_request('delete', f'/solicitudes-demo/{demo.id}/')
+        
+        response = view(request, pk=demo.id)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['estado'], 'cancelada')
+        self.assertEqual(response.data['id'], demo.id)
+        
+        # Verify record persists in DB
+        demo.refresh_from_db()
+        self.assertEqual(demo.estado, 'cancelada')
+        self.assertEqual(DemoRequest.objects.count(), 1)
+
+    def test_destroy_double_cancel_returns_400(self):
+        """8.6: RED - Second cancel on already cancelled request returns 400."""
+        demo = DemoRequest.objects.create(
+            nombre="Test Demo", email="demo@test.com", telefono="3001234567",
+            nombre_gimnasio="Test Gym", estado='cancelada'
+        )
+        
+        from gimnasioApp.views import DemoRequestViewSet
+        view = DemoRequestViewSet.as_view({'delete': 'destroy'})
+        request = self._make_superadmin_request('delete', f'/solicitudes-demo/{demo.id}/')
+        
+        response = view(request, pk=demo.id)
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('detail', response.data)
+        self.assertEqual(response.data['detail'], 'La solicitud ya está cancelada.')
+
+    def test_patch_on_cancelled_returns_400(self):
+        """8.7: RED - PATCH on cancelled request returns 400 (serializer validation)."""
+        demo = DemoRequest.objects.create(
+            nombre="Test Demo", email="demo@test.com", telefono="3001234567",
+            nombre_gimnasio="Test Gym", estado='cancelada'
+        )
+        
+        from gimnasioApp.views import DemoRequestViewSet
+        view = DemoRequestViewSet.as_view({'patch': 'partial_update'})
+        request = self._make_superadmin_request('patch', f'/solicitudes-demo/{demo.id}/', {'estado': 'contactado'})
+        
+        response = view(request, pk=demo.id)
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('estado', response.data)
+
+    def test_destroy_only_allows_pendiente_or_contactado(self):
+        """destroy() should only work on pendiente or contactado states."""
+        # Test with pendiente (should work)
+        demo1 = DemoRequest.objects.create(
+            nombre="Demo 1", email="demo1@test.com", telefono="3001234567",
+            nombre_gimnasio="Gym 1", estado='pendiente'
+        )
+        from gimnasioApp.views import DemoRequestViewSet
+        view = DemoRequestViewSet.as_view({'delete': 'destroy'})
+        request = self._make_superadmin_request('delete', f'/solicitudes-demo/{demo1.id}/')
+        response = view(request, pk=demo1.id)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+# Test with contactado (should work)
+        demo2 = DemoRequest.objects.create(
+            nombre="Demo 2", email="demo2@test.com", telefono="3001234568",
+            nombre_gimnasio="Gym 2", estado='contactado'
+        )
+        request = self._make_superadmin_request('delete', f'/solicitudes-demo/{demo2.id}/')
+        response = view(request, pk=demo2.id)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
