@@ -71,7 +71,7 @@ const ListMiembro = () => {
     const [users, setUser] = useState<Miembro[]>([]);
     const [asignaciones, setAsignaciones] = useState<AsignarMemberShips[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [filteredData, setFilteredData] = useState<number | null>(null);
+    const [filteredData, setFilteredData] = useState<ReturnType<typeof setTimeout> | null>(null);
     const [search, setSearch] = useState('');
 
     // Mapa de miembro_id -> última membresía asignada
