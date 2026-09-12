@@ -225,17 +225,12 @@ class MembresiaAsignada(models.Model):
                 raise ValidationError(
                     f"Esa membresía solo permite hasta {self.membresia.max_multiplier} periodos"
                 )
-            mult = Decimal(str(self.multiplier))
-            disc = Decimal(str(self.discount_percent or 0))
-            dias_totales = int(self.membresia.duration * mult)
-            self.dateFinal = inicio + timedelta(days=dias_totales)
-            self.price = self.membresia.price * mult * (Decimal('1') - disc / Decimal('100'))
-        else:
-            mult = Decimal(str(self.multiplier or 1))
-            disc = Decimal(str(self.discount_percent or 0))
-            dias_totales = int(self.membresia.duration * mult)
-            self.dateFinal = inicio + timedelta(days=dias_totales)
-            self.price = self.membresia.price * mult * (Decimal('1') - disc / Decimal('100'))
+        # Always recalculate using stored multiplier and discount_percent
+        mult = Decimal(str(self.multiplier))
+        disc = Decimal(str(self.discount_percent or 0))
+        dias_totales = int(self.membresia.duration * mult)
+        self.dateFinal = inicio + timedelta(days=dias_totales)
+        self.price = self.membresia.price * mult * (Decimal('1') - disc / Decimal('100'))
         super().save(*args, **kwargs)
 
     def clean(self):
