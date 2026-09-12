@@ -95,6 +95,25 @@ class UserViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
 # Registro público para crear usuario inicial
 # El login se maneja con SimpleJWT en /token/ (TokenObtainPairView)
 class RegisterViewSet(APIView):
+    """Public self-service registration endpoint.
+
+    INTENTIONAL: This endpoint uses AllowAny permission to allow gym owners
+    to create their account without prior authentication. This is by design.
+
+    Threat Model:
+    - Spam registrations: Mitigated by email uniqueness constraint and
+      automatic gym creation (each registration creates a Gimnasio record).
+      Rate limiting SHOULD be added in a future phase.
+    - Abuse: Each registration creates a full gym + admin user. Consider
+      CAPTCHA or email verification in future hardening.
+    - Data exposure: Only returns user data for the created account.
+      No cross-tenant data leakage possible.
+
+    Protections in place:
+    - Email uniqueness (database constraint + serializer validation)
+    - Password hashing (set_password via AbstractBaseUser)
+    - No sensitive data exposed in response
+    """
     permission_classes = [AllowAny]
     
     def post(self, request, *args, **kwargs):
@@ -909,16 +928,16 @@ logger = logging.getLogger(__name__)
 class DemoRequestViewSet(viewsets.ModelViewSet):
     """
     Endpoint para recibir solicitudes de demo desde la landing/login.
-    POST público (sin autenticar). GET y PATCH solo para superadmins autenticados.
+    POST público (sin autenticar). GET, PATCH y DELETE solo para superadmins autenticados.
     """
     queryset = DemoRequest.objects.all()
     serializer_class = DemoRequestSerializer
-    http_method_names = ['get', 'post', 'patch', 'options']
+    http_method_names = ['get', 'post', 'patch', 'delete', 'options']
 
     def get_permissions(self):
         if self.request.method == 'POST':
             return [AllowAny()]
-        # PATCH y GET requieren superadmin
+        # PATCH, GET y DELETE requieren superadmin
         return [IsAuthenticated(), IsSuperAdmin()]
 
     def perform_create(self, serializer):
@@ -966,6 +985,19 @@ class DemoRequestViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
+    def destroy(self, request, *args, **kwargs):
+        """Soft delete: sets estado='cancelada' instead of hard delete."""
+        demo = self.get_object()
+        if demo.estado == 'cancelada':
+            return Response(
+                {'detail': 'La solicitud ya está cancelada.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        demo.estado = 'cancelada'
+        demo.save(update_fields=['estado'])
+        serializer = self.get_serializer(demo)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 # ============================================================
 # PLATFORM — SUPERADMIN VIEWS
@@ -994,12 +1026,12 @@ class PlatformStatsView(APIView):
             prev_month = mes_actual - 1
             prev_year = anio_actual
 
-        # Total gyms
-        total_gimnasios = Gimnasio.objects.count()
-        gimnasios_activos = Gimnasio.objects.filter(is_active=True).count()
+        # Total gyms - use all_objects for total, objects already filters active
+        total_gimnasios = Gimnasio.all_objects.count()
+        gimnasios_activos = Gimnasio.objects.count()
 
-        # Staff total (admin + recepcion + superadmin)
-        total_usuarios_staff = Usuario.objects.count()
+        # Staff total (admin + recepcion + superadmin) - use all_objects for total
+        total_usuarios_staff = Usuario.all_objects.count()
 
         # Demo requests
         demo_pendientes = DemoRequest.objects.filter(estado='pendiente').count()
@@ -1078,11 +1110,11 @@ class GimnasioPlatformViewSet(viewsets.ModelViewSet):
     """CRUD de gimnasios para superadmin (sin filtro multi-tenant).
     
     List: solo gimnasios activos (is_active=True)
-    Retrieve/Update/Delete: permite acceder a cualquier gym por ID
+    Retrieve/Update/Delete: permite acceder a cualquier gym por ID (incluye inactivos para poder reactivarlos)
     """
     permission_classes = [IsAuthenticated, IsSuperAdmin, RequirePasswordChange]
     pagination_class = PlatformPagination
-    queryset = Gimnasio.objects.all().order_by('-created_at')
+    queryset = Gimnasio.all_objects.all().order_by('-created_at')
     filter_backends = [DjangoFilterBackend, SearchFilter]
     search_fields = ['name', 'address', 'phone']
 

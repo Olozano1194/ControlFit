@@ -4,10 +4,14 @@ from .models import Gimnasio, Usuario, UsuarioGym, UsuarioGymDay, Membresia, Mem
 
 @admin.register(Gimnasio)
 class GimnasioAdmin(admin.ModelAdmin):
-    list_display = ('name', 'address', 'phone', 'is_active', 'created_at')
+    list_display = ('name', 'address', 'phone', 'is_active', 'country_code', 'created_at')
     list_filter = ('is_active',)
     search_fields = ('name', 'address')
     ordering = ('name',)
+    
+    def get_queryset(self, request):
+        # Admin needs to see ALL gyms (including inactive) to reactivate them
+        return Gimnasio.all_objects.all()
 
 
 @admin.register(Usuario)
@@ -16,6 +20,10 @@ class UsuarioAdmin(admin.ModelAdmin):
     list_filter = ('roles', 'is_active', 'gimnasio')
     search_fields = ('email', 'name', 'lastname')
     ordering = ('-created_at',)
+    
+    def get_queryset(self, request):
+        # Admin needs to see ALL users (including inactive) for management
+        return Usuario.all_objects.all()
 
 
 @admin.register(UsuarioGym)
