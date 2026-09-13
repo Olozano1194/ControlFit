@@ -1691,6 +1691,20 @@ class TokenVerifyEndpointTest(TestCase):
         
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_verify_refresh_token_rejected(self):
+        """Refresh token passed to verify endpoint → 401 (verify only accepts access tokens)."""
+        from gimnasioApp.views import CookieTokenVerifyView
+        from rest_framework_simplejwt.tokens import RefreshToken
+        
+        refresh = RefreshToken.for_user(self.user)
+        auth_header = f'Bearer {refresh}'
+        
+        request = self._make_verify_request(auth_header)
+        view = CookieTokenVerifyView.as_view()
+        response = view(request)
+        
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
 
 class TokenVerifyIntegrationTest(TestCase):
     """Integration tests for token verify flow."""
