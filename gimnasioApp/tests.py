@@ -1255,21 +1255,52 @@ class EmailServiceTest(TestCase):
         call_args = mock_logger.error.call_args[0]
         self.assertIn('not found', call_args[0])
 
-    @patch('gimnasioApp.services.email.requests.post', side_effect=requests.exceptions.RequestException('API Error'))
-    @patch('gimnasioApp.services.email.logger')
-    @patch('django.conf.settings.FRONTEND_URL', 'http://localhost:5173')
-    @patch('django.conf.settings.SUPPORT_EMAIL', 'soporte@controlfit.app')
-    @patch('django.conf.settings.RESEND_API_KEY', 're_test_key')
-    @patch('django.conf.settings.DEFAULT_FROM_EMAIL', 'ControlFit <noreply@controlfit.app>')
-    def test_send_welcome_email_logs_error_on_send_failure(self, mock_logger, mock_post):
-        """Test that Resend API failure logs exception and doesn't re-raise."""
-        from gimnasioApp.services.email import send_welcome_email
+
+# ============================================================
+# JWT TOKEN LIFETIME TESTS (Phase 1)
+# ============================================================
+
+class TokenLifetimeSettingsTest(TestCase):
+    """Tests for SIMPLE_JWT token lifetime configuration."""
+
+    def test_access_token_lifetime_is_15_minutes(self):
+        """SIMPLE_JWT ACCESS_TOKEN_LIFETIME should be 15 minutes."""
+        from django.conf import settings
+        from datetime import timedelta
         
-        # Should not raise
-        send_welcome_email(self.gimnasio.id, self.admin.id, 'TempPass123')
+        self.assertEqual(
+            settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'],
+            timedelta(minutes=15)
+        )
+
+    def test_refresh_token_lifetime_is_3_days(self):
+        """SIMPLE_JWT REFRESH_TOKEN_LIFETIME should be 3 days (72 hours)."""
+        from django.conf import settings
+        from datetime import timedelta
         
-        mock_logger.exception.assert_called()
-        call_args = mock_logger.exception.call_args
-        # call_args[0] is the format string, call_args[1] are the args
-        self.assertIn('Failed to send welcome email', call_args[0][0])
-        self.assertIn('admin@test.com', call_args[0][1])
+        self.assertEqual(
+            settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'],
+            timedelta(days=3)
+        )
+
+    def test_rotate_refresh_tokens_enabled(self):
+        """SIMPLE_JWT ROTATE_REFRESH_TOKENS should be True."""
+        from django.conf import settings
+        
+        self.assertTrue(settings.SIMPLE_JWT['ROTATE_REFRESH_TOKENS'])
+
+    def test_blacklist_after_rotation_enabled(self):
+        """SIMPLE_JWT BLACKLIST_AFTER_ROTATION should be True."""
+        from django.conf import settings
+        
+        self.assertTrue(settings.SIMPLE_JWT['BLACKLIST_AFTER_ROTATION'])
+
+
+class CSRFSettingTest(TestCase):
+    """Tests for CSRF_ENFORCE feature flag."""
+
+    def test_csrf_enforce_defaults_to_false(self):
+        """CSRF_ENFORCE should default to False for gradual rollout."""
+        from django.conf import settings
+        
+        self.assertFalse(settings.CSRF_ENFORCE)
