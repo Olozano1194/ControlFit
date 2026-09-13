@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework import routers
-from .views import UserViewSet, userProfileView, UsuarioGymViewSet, UsuarioGymDayViewSet, Home, MembresiaViewSet, MembresiaAsignadaViewSet, PagoMembresiaViewSet, ActivitiesView, ExportReportView, RegisterViewSet, DashboardStatsView, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView, NotificationViewSet, CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView, PlatformStatsView, GimnasioPlatformViewSet, PasswordChangeView
+from .views import UserViewSet, userProfileView, UsuarioGymViewSet, UsuarioGymDayViewSet, Home, MembresiaViewSet, MembresiaAsignadaViewSet, PagoMembresiaViewSet, ActivitiesView, ExportReportView, RegisterViewSet, DashboardStatsView, TipoEventoViewSet, EventoCalendarioViewSet, PublicCalendarioView, NotificationViewSet, CookieTokenObtainPairView, CookieTokenRefreshView, CookieTokenVerifyView, LogoutView, PlatformStatsView, GimnasioPlatformViewSet, PasswordChangeView
 
 #api versioning
 router = routers.DefaultRouter()
@@ -34,9 +34,10 @@ urlpatterns = [
     # Platform endpoints (superadmin only)
     path('gym/api/v1/platform/stats/', PlatformStatsView.as_view(), name='platform-stats'),
     
-    # SimpleJWT endpoints (cookie-based: login/refresh/logout)
+    # SimpleJWT endpoints (cookie-based: login/refresh/logout/verify)
     path('gym/api/v1/token/', CookieTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('gym/api/v1/token/refresh/', CookieTokenRefreshView.as_view(), name='token_refresh'),
+    path('gym/api/v1/token/verify/', CookieTokenVerifyView.as_view(), name='token_verify'),
     path('gym/api/v1/auth/logout/', LogoutView.as_view(), name='auth_logout'),
     path('gym/api/v1/auth/password/change/', PasswordChangeView.as_view(), name='password-change'),
     

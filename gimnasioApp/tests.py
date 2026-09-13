@@ -1304,3 +1304,481 @@ class CSRFSettingTest(TestCase):
         from django.conf import settings
         
         self.assertFalse(settings.CSRF_ENFORCE)
+
+
+# ============================================================
+# PHASE 2: CSRF COOKIE HELPERS TESTS
+# ============================================================
+
+class CSRFCookieHelperTest(TestCase):
+    """Tests for CSRF cookie helper functions in auth_cookie.py."""
+
+    def setUp(self):
+        from django.http import HttpResponse
+        self.response = HttpResponse()
+
+    def test_set_csrf_cookie_sets_correct_attributes_in_development(self):
+        """set_csrf_cookie should set cookie with HttpOnly=False, SameSite=Lax, correct path in DEBUG=True."""
+        from django.test.utils import override_settings
+        from gimnasioApp.auth_cookie import set_csrf_cookie
+        
+        with override_settings(DEBUG=True):
+            set_csrf_cookie(self.response, 'test-csrf-token')
+            
+            cookie = self.response.cookies.get('csrftoken')
+            self.assertIsNotNone(cookie)
+            self.assertEqual(cookie.value, 'test-csrf-token')
+            self.assertFalse(cookie['httponly'])  # HttpOnly=False for JS access
+            self.assertEqual(cookie['samesite'], 'Lax')  # SameSite=Lax in dev
+            self.assertEqual(cookie['path'], '/gym/api/v1/')  # API path scoped
+            self.assertEqual(cookie['max-age'], 86400)  # 1 day
+            self.assertFalse(cookie['secure'])  # Not secure in dev
+
+    def test_set_csrf_cookie_sets_correct_attributes_in_production(self):
+        """set_csrf_cookie should set cookie with Secure=True, SameSite=None in DEBUG=False."""
+        from django.test.utils import override_settings
+        from gimnasioApp.auth_cookie import set_csrf_cookie
+        
+        with override_settings(DEBUG=False):
+            set_csrf_cookie(self.response, 'prod-csrf-token')
+            
+            cookie = self.response.cookies.get('csrftoken')
+            self.assertIsNotNone(cookie)
+            self.assertEqual(cookie.value, 'prod-csrf-token')
+            self.assertFalse(cookie['httponly'])  # HttpOnly=False for JS access
+            self.assertEqual(cookie['samesite'], 'None')  # SameSite=None in prod
+            self.assertEqual(cookie['path'], '/gym/api/v1/')  # API path scoped
+            self.assertEqual(cookie['max-age'], 86400)  # 1 day
+            self.assertTrue(cookie['secure'])  # Secure in prod
+
+    def test_clear_csrf_cookie_clears_with_correct_attributes(self):
+        """clear_csrf_cookie should delete cookie with matching path and SameSite."""
+        from django.test.utils import override_settings
+        from gimnasioApp.auth_cookie import clear_csrf_cookie
+        
+        with override_settings(DEBUG=True):
+            clear_csrf_cookie(self.response)
+            
+            cookie = self.response.cookies.get('csrftoken')
+            self.assertIsNotNone(cookie)
+            self.assertEqual(cookie.value, '')  # Empty value for deletion
+            self.assertEqual(cookie['path'], '/gym/api/v1/')
+            self.assertEqual(cookie['samesite'], 'Lax')
+
+    def test_get_csrf_token_returns_token_from_request(self):
+        """get_csrf_token should extract csrftoken from request cookies."""
+        from django.test import RequestFactory
+        from gimnasioApp.auth_cookie import get_csrf_token
+        
+        factory = RequestFactory()
+        request = factory.get('/')
+        request.COOKIES['csrftoken'] = 'extracted-token'
+        
+        token = get_csrf_token(request)
+        self.assertEqual(token, 'extracted-token')
+
+    def test_get_csrf_token_returns_none_when_missing(self):
+        """get_csrf_token should return None when cookie is not present."""
+        from django.test import RequestFactory
+        from gimnasioApp.auth_cookie import get_csrf_token
+        
+        factory = RequestFactory()
+        request = factory.get('/')
+        # No csrftoken cookie set
+        
+        token = get_csrf_token(request)
+        self.assertIsNone(token)
+
+
+# ============================================================
+# PHASE 2: CSRF VALIDATION TESTS
+# ============================================================
+
+class CSRFValidationTest(TestCase):
+    """Tests for validate_csrf function with log-only mode."""
+
+    def setUp(self):
+        from django.test import RequestFactory
+        self.factory = RequestFactory()
+
+    def _make_request(self, method='POST', csrf_header=None, csrf_cookie=None):
+        """Helper to create a request with optional CSRF header and cookie."""
+        request = self.factory.generic(method, '/gym/api/v1/some-endpoint/')
+        if csrf_header:
+            request.META['HTTP_X_CSRF_TOKEN'] = csrf_header
+        if csrf_cookie:
+            request.COOKIES['csrftoken'] = csrf_cookie
+        return request
+
+    @patch('django.conf.settings.CSRF_ENFORCE', False)
+    @patch('gimnasioApp.views.logger')
+    def test_validate_csrf_log_only_mode_allows_missing_header(self, mock_logger):
+        """In log-only mode (CSRF_ENFORCE=False), missing header should log but return True."""
+        from gimnasioApp.views import validate_csrf
+        
+        request = self._make_request(method='POST', csrf_cookie='valid-token')
+        result = validate_csrf(request)
+        
+        self.assertTrue(result)
+        mock_logger.warning.assert_called()
+        call_args = mock_logger.warning.call_args[0]
+        self.assertIn('CSRF validation failed', call_args[0])
+
+    @patch('django.conf.settings.CSRF_ENFORCE', False)
+    @patch('gimnasioApp.views.logger')
+    def test_validate_csrf_log_only_mode_allows_mismatched_header(self, mock_logger):
+        """In log-only mode, mismatched header should log but return True."""
+        from gimnasioApp.views import validate_csrf
+        
+        request = self._make_request(method='POST', csrf_header='wrong-token', csrf_cookie='valid-token')
+        result = validate_csrf(request)
+        
+        self.assertTrue(result)
+        mock_logger.warning.assert_called()
+
+    @patch('django.conf.settings.CSRF_ENFORCE', True)
+    def test_validate_csrf_enforce_mode_rejects_missing_header(self):
+        """In enforce mode (CSRF_ENFORCE=True), missing header should return False."""
+        from gimnasioApp.views import validate_csrf
+        
+        request = self._make_request(method='POST', csrf_cookie='valid-token')
+        result = validate_csrf(request)
+        
+        self.assertFalse(result)
+
+    @patch('django.conf.settings.CSRF_ENFORCE', True)
+    def test_validate_csrf_enforce_mode_rejects_mismatched_header(self):
+        """In enforce mode, mismatched header should return False."""
+        from gimnasioApp.views import validate_csrf
+        
+        request = self._make_request(method='POST', csrf_header='wrong-token', csrf_cookie='valid-token')
+        result = validate_csrf(request)
+        
+        self.assertFalse(result)
+
+    @patch('django.conf.settings.CSRF_ENFORCE', True)
+    def test_validate_csrf_enforce_mode_allows_matching_header(self):
+        """In enforce mode, matching header should return True."""
+        from gimnasioApp.views import validate_csrf
+        
+        request = self._make_request(method='POST', csrf_header='matching-token', csrf_cookie='matching-token')
+        result = validate_csrf(request)
+        
+        self.assertTrue(result)
+
+    def test_validate_csrf_get_request_bypasses_validation(self):
+        """GET requests should bypass CSRF validation entirely."""
+        from gimnasioApp.views import validate_csrf
+        
+        request = self._make_request(method='GET', csrf_header=None, csrf_cookie=None)
+        result = validate_csrf(request)
+        
+        self.assertTrue(result)
+
+    def test_validate_csrf_put_patch_delete_require_validation(self):
+        """PUT, PATCH, DELETE should require CSRF validation."""
+        from gimnasioApp.views import validate_csrf
+        
+        for method in ['PUT', 'PATCH', 'DELETE']:
+            with self.subTest(method=method):
+                with patch('django.conf.settings.CSRF_ENFORCE', True):
+                    request = self._make_request(method=method, csrf_header='token', csrf_cookie='token')
+                    result = validate_csrf(request)
+                    self.assertTrue(result)
+                
+                with patch('django.conf.settings.CSRF_ENFORCE', True):
+                    request = self._make_request(method=method, csrf_header=None, csrf_cookie='token')
+                    result = validate_csrf(request)
+                    self.assertFalse(result)
+
+
+# ============================================================
+# PHASE 2: LOGIN/REFRESH/LOGOUT CSRF COOKIE TESTS
+# ============================================================
+
+class AuthViewsCSRFCookieTest(TestCase):
+    """Tests for CSRF cookie being set/cleared on login, refresh, logout."""
+
+    def setUp(self):
+        self.gimnasio = Gimnasio.objects.create(name="Test Gym")
+        self.user = Usuario.all_objects.create_user(
+            email="test@example.com",
+            name="Test",
+            lastname="User",
+            password="password123",
+            gimnasio=self.gimnasio
+        )
+        self.factory = APIRequestFactory()
+
+    def test_login_sets_csrf_cookie(self):
+        """POST /token/ should set csrftoken cookie with correct attributes."""
+        from gimnasioApp.views import CookieTokenObtainPairView
+        
+        request = self.factory.post('/gym/api/v1/token/', {
+            'email': 'test@example.com',
+            'password': 'password123'
+        }, format='json')
+        
+        view = CookieTokenObtainPairView.as_view()
+        response = view(request)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('csrftoken', response.cookies)
+        cookie = response.cookies['csrftoken']
+        self.assertFalse(cookie['httponly'])
+        self.assertEqual(cookie['path'], '/gym/api/v1/')
+        self.assertEqual(cookie['max-age'], 86400)
+
+    def test_refresh_sets_csrf_cookie(self):
+        """POST /token/refresh/ should set csrftoken cookie with correct attributes."""
+        from gimnasioApp.views import CookieTokenRefreshView
+        from rest_framework_simplejwt.tokens import RefreshToken
+        
+        refresh = RefreshToken.for_user(self.user)
+        
+        request = self.factory.post('/gym/api/v1/token/refresh/')
+        request.COOKIES['refresh_token'] = str(refresh)
+        
+        view = CookieTokenRefreshView.as_view()
+        response = view(request)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('csrftoken', response.cookies)
+        cookie = response.cookies['csrftoken']
+        self.assertFalse(cookie['httponly'])
+        self.assertEqual(cookie['path'], '/gym/api/v1/')
+
+    def test_logout_clears_csrf_cookie(self):
+        """POST /auth/logout/ should clear csrftoken cookie."""
+        from gimnasioApp.views import LogoutView
+        from rest_framework_simplejwt.tokens import RefreshToken
+        
+        refresh = RefreshToken.for_user(self.user)
+        
+        request = self.factory.post('/gym/api/v1/auth/logout/')
+        request.COOKIES['refresh_token'] = str(refresh)
+        
+        view = LogoutView.as_view()
+        response = view(request)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('csrftoken', response.cookies)
+        cookie = response.cookies['csrftoken']
+        self.assertEqual(cookie.value, '')  # Empty for deletion
+        self.assertEqual(cookie['path'], '/gym/api/v1/')
+
+    def test_register_sets_csrf_cookie(self):
+        """POST /register/ should set csrftoken cookie with correct attributes."""
+        from gimnasioApp.views import RegisterViewSet
+        
+        request = self.factory.post('/gym/api/v1/register/', {
+            'email': 'newuser@example.com',
+            'password': 'password123',
+            'name': 'New',
+            'lastname': 'User'
+        }, format='json')
+        
+        view = RegisterViewSet.as_view()
+        response = view(request)
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('csrftoken', response.cookies)
+        cookie = response.cookies['csrftoken']
+        self.assertFalse(cookie['httponly'])
+        self.assertEqual(cookie['path'], '/gym/api/v1/')
+        self.assertEqual(cookie['max-age'], 86400)
+
+
+# ============================================================
+# PHASE 3: TOKEN VERIFY ENDPOINT TESTS
+# ============================================================
+
+class TokenVerifyEndpointTest(TestCase):
+    """Tests for POST /token/verify/ endpoint."""
+
+    def setUp(self):
+        self.gimnasio = Gimnasio.objects.create(name="Test Gym")
+        self.user = Usuario.all_objects.create_user(
+            email="test@example.com",
+            name="Test",
+            lastname="User",
+            password="password123",
+            gimnasio=self.gimnasio
+        )
+        self.factory = APIRequestFactory()
+
+    def _make_verify_request(self, auth_header=None):
+        """Helper to create a verify request with optional Authorization header."""
+        request = self.factory.post('/gym/api/v1/token/verify/')
+        if auth_header:
+            request.META['HTTP_AUTHORIZATION'] = auth_header
+        return request
+
+    def test_verify_valid_token_returns_200_with_valid_and_exp(self):
+        """Valid access token → 200 {valid: true, exp: timestamp}."""
+        from gimnasioApp.views import CookieTokenVerifyView
+        from rest_framework_simplejwt.tokens import AccessToken
+        
+        access = AccessToken.for_user(self.user)
+        auth_header = f'Bearer {access}'
+        
+        request = self._make_verify_request(auth_header)
+        view = CookieTokenVerifyView.as_view()
+        response = view(request)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('valid', response.data)
+        self.assertTrue(response.data['valid'])
+        self.assertIn('exp', response.data)
+        self.assertIsInstance(response.data['exp'], int)
+        # exp should be a Unix timestamp in the future
+        import time
+        self.assertGreater(response.data['exp'], int(time.time()))
+
+    def test_verify_expired_token_returns_401(self):
+        """Expired access token → 401."""
+        from gimnasioApp.views import CookieTokenVerifyView
+        from rest_framework_simplejwt.tokens import AccessToken
+        from datetime import timedelta
+        from django.utils import timezone
+        
+        # Create an already-expired token by manipulating exp
+        access = AccessToken.for_user(self.user)
+        # Manually set exp to past
+        access.payload['exp'] = int((timezone.now() - timedelta(minutes=10)).timestamp())
+        
+        auth_header = f'Bearer {access}'
+        
+        request = self._make_verify_request(auth_header)
+        view = CookieTokenVerifyView.as_view()
+        response = view(request)
+        
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_verify_invalid_malformed_token_returns_401(self):
+        """Invalid/malformed token → 401."""
+        from gimnasioApp.views import CookieTokenVerifyView
+        
+        auth_header = 'Bearer invalid.token.string'
+        
+        request = self._make_verify_request(auth_header)
+        view = CookieTokenVerifyView.as_view()
+        response = view(request)
+        
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_verify_missing_authorization_header_returns_401(self):
+        """Missing Authorization header → 401."""
+        from gimnasioApp.views import CookieTokenVerifyView
+        
+        request = self._make_verify_request(auth_header=None)
+        view = CookieTokenVerifyView.as_view()
+        response = view(request)
+        
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_verify_without_bearer_prefix_returns_401(self):
+        """Authorization header without Bearer prefix → 401."""
+        from gimnasioApp.views import CookieTokenVerifyView
+        from rest_framework_simplejwt.tokens import AccessToken
+        
+        access = AccessToken.for_user(self.user)
+        auth_header = str(access)  # Missing "Bearer " prefix
+        
+        request = self._make_verify_request(auth_header)
+        view = CookieTokenVerifyView.as_view()
+        response = view(request)
+        
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class TokenVerifyIntegrationTest(TestCase):
+    """Integration tests for token verify flow."""
+
+    def setUp(self):
+        self.gimnasio = Gimnasio.objects.create(name="Test Gym")
+        self.user = Usuario.all_objects.create_user(
+            email="test@example.com",
+            name="Test",
+            lastname="User",
+            password="password123",
+            gimnasio=self.gimnasio
+        )
+        self.factory = APIRequestFactory()
+
+    def test_login_then_verify_access_token_returns_200(self):
+        """Integration: login → get access → call verify → 200."""
+        from gimnasioApp.views import CookieTokenObtainPairView, CookieTokenVerifyView
+        from rest_framework_simplejwt.tokens import RefreshToken
+        
+        # Step 1: Login
+        login_request = self.factory.post('/gym/api/v1/token/', {
+            'email': 'test@example.com',
+            'password': 'password123'
+        }, format='json')
+        login_view = CookieTokenObtainPairView.as_view()
+        login_response = login_view(login_request)
+        
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        self.assertIn('access', login_response.data)
+        access_token = login_response.data['access']
+        
+        # Step 2: Call verify with the access token
+        verify_request = self.factory.post('/gym/api/v1/token/verify/')
+        verify_request.META['HTTP_AUTHORIZATION'] = f'Bearer {access_token}'
+        verify_view = CookieTokenVerifyView.as_view()
+        verify_response = verify_view(verify_request)
+        
+        self.assertEqual(verify_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(verify_response.data['valid'])
+        self.assertIn('exp', verify_response.data)
+
+    def test_refresh_flow_does_not_affect_verify(self):
+        """Refresh flow doesn't affect verify (verify uses access token, not refresh)."""
+        from gimnasioApp.views import CookieTokenObtainPairView, CookieTokenRefreshView, CookieTokenVerifyView
+        from rest_framework_simplejwt.tokens import RefreshToken
+        
+        # Step 1: Login to get initial tokens
+        login_request = self.factory.post('/gym/api/v1/token/', {
+            'email': 'test@example.com',
+            'password': 'password123'
+        }, format='json')
+        login_view = CookieTokenObtainPairView.as_view()
+        login_response = login_view(login_request)
+        
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        initial_access = login_response.data['access']
+        refresh_cookie = login_response.cookies.get('refresh_token')
+        self.assertIsNotNone(refresh_cookie)
+        
+        # Step 2: Verify initial access token works
+        verify_request = self.factory.post('/gym/api/v1/token/verify/')
+        verify_request.META['HTTP_AUTHORIZATION'] = f'Bearer {initial_access}'
+        verify_view = CookieTokenVerifyView.as_view()
+        verify_response = verify_view(verify_request)
+        self.assertEqual(verify_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(verify_response.data['valid'])
+        
+        # Step 3: Call refresh (rotates refresh token, returns new access)
+        refresh_request = self.factory.post('/gym/api/v1/token/refresh/')
+        refresh_request.COOKIES['refresh_token'] = refresh_cookie.value
+        refresh_view = CookieTokenRefreshView.as_view()
+        refresh_response = refresh_view(refresh_request)
+        
+        self.assertEqual(refresh_response.status_code, status.HTTP_200_OK)
+        self.assertIn('access', refresh_response.data)
+        new_access = refresh_response.data['access']
+        
+        # Step 4: Verify NEW access token works
+        verify_request2 = self.factory.post('/gym/api/v1/token/verify/')
+        verify_request2.META['HTTP_AUTHORIZATION'] = f'Bearer {new_access}'
+        verify_response2 = verify_view(verify_request2)
+        self.assertEqual(verify_response2.status_code, status.HTTP_200_OK)
+        self.assertTrue(verify_response2.data['valid'])
+        
+        # Step 5: Verify OLD access token still works (until expiry)
+        verify_request3 = self.factory.post('/gym/api/v1/token/verify/')
+        verify_request3.META['HTTP_AUTHORIZATION'] = f'Bearer {initial_access}'
+        verify_response3 = verify_view(verify_request3)
+        self.assertEqual(verify_response3.status_code, status.HTTP_200_OK)
+        self.assertTrue(verify_response3.data['valid'])

@@ -5,9 +5,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
-from .auth_cookie import set_refresh_cookie, clear_refresh_cookie
+from .auth_cookie import set_refresh_cookie, clear_refresh_cookie, set_csrf_cookie, clear_csrf_cookie, get_csrf_token
 from .serializers import UsuarioSerializer, UsuarioGymSerializer, UsuarioGymDaySerializer, MembresiasSerializer, MembresiaAsignadaSerializer, PagoMembresiaSerializer, TipoEventoSerializer, EventoCalendarioSerializer, NotificationSerializer, PasswordChangeSerializer
 from .models import Usuario, UsuarioGym, UsuarioGymDay, Membresia, MembresiaAsignada, PagoMembresia, Gimnasio, TipoEvento, EventoCalendario, Notification
 from django.utils import timezone
@@ -30,6 +30,56 @@ from decimal import Decimal
 from django.db.models import Sum
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
+import logging
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================
+# CSRF VALIDATION
+# ============================================================
+
+def validate_csrf(request):
+    """Validate CSRF token from X-CSRF-Token header against csrftoken cookie.
+    
+    In log-only mode (CSRF_ENFORCE=False): logs violations but allows request.
+    In enforce mode (CSRF_ENFORCE=True): returns False for missing/mismatched tokens.
+    
+    GET requests always bypass validation.
+    Mutating methods (POST, PUT, PATCH, DELETE) require validation.
+    
+    Returns:
+        bool: True if validation passes (or is bypassed), False if validation fails in enforce mode.
+    """
+    # GET requests bypass CSRF validation
+    if request.method == 'GET':
+        return True
+    
+    # Only validate mutating methods
+    if request.method not in ('POST', 'PUT', 'PATCH', 'DELETE'):
+        return True
+    
+    csrf_header = request.META.get('HTTP_X_CSRF_TOKEN')
+    csrf_cookie = get_csrf_token(request)
+    
+    # Check if tokens match
+    is_valid = csrf_header is not None and csrf_cookie is not None and csrf_header == csrf_cookie
+    
+    if not is_valid:
+        logger.warning(
+            'CSRF validation failed: method=%s path=%s header_present=%s cookie_present=%s',
+            request.method,
+            request.path,
+            csrf_header is not None,
+            csrf_cookie is not None
+        )
+        
+        # In enforce mode, reject the request
+        if getattr(settings, 'CSRF_ENFORCE', False):
+            return False
+    
+    return True
 
 
 # ============================================================
@@ -158,6 +208,7 @@ class RegisterViewSet(APIView):
         
         # Establecer refresh token como cookie HttpOnly (helper compartido)
         set_refresh_cookie(response, refresh)
+        set_csrf_cookie(response, refresh)
         
         return response
 
@@ -176,6 +227,7 @@ class CookieTokenObtainPairView(TokenObtainPairView):
             refresh = response.data.get('refresh')
             if refresh:
                 set_refresh_cookie(response, refresh)
+                set_csrf_cookie(response, refresh)  # Use refresh as CSRF token source
                 del response.data['refresh']  # Nunca exponer el refresh en el body
         return response
 
@@ -201,6 +253,7 @@ class CookieTokenRefreshView(TokenRefreshView):
         new_refresh = response.data.get('refresh')
         if new_refresh:
             set_refresh_cookie(response, new_refresh)
+            set_csrf_cookie(response, new_refresh)  # Set new CSRF cookie with rotated refresh
             del response.data['refresh']
         return response
 
@@ -219,7 +272,43 @@ class LogoutView(APIView):
                 pass
         response = Response({'detail': 'Logged out'})
         clear_refresh_cookie(response)
+        clear_csrf_cookie(response)
         return response
+
+
+# ============================================================
+# TOKEN VERIFY ENDPOINT
+# ============================================================
+
+class CookieTokenVerifyView(APIView):
+    """Verify: lee el access token del header Authorization, valida y devuelve {valid: true, exp: timestamp} o 401."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        # Extract token from Authorization header
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if not auth_header.startswith('Bearer '):
+            return Response(
+                {'detail': 'Authorization header missing or invalid'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        token_str = auth_header[7:]  # Remove 'Bearer ' prefix
+        
+        # Validate the access token
+        try:
+            access_token = AccessToken(token_str, verify=True)
+        except (TokenError, InvalidToken):
+            return Response(
+                {'detail': 'Token is invalid or expired'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Return valid response with exp timestamp
+        return Response({
+            'valid': True,
+            'exp': access_token.payload.get('exp')
+        }, status=status.HTTP_200_OK)
 
 
 # ============================================================
