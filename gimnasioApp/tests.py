@@ -1705,6 +1705,33 @@ class TokenVerifyEndpointTest(TestCase):
         
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_verify_old_long_lived_token_still_valid(self):
+        """Backward compat: token issued with old 30min lifetime still verifies.
+        
+        Simulates a token created before the config change (old ACCESS_TOKEN_LIFETIME=30min).
+        The verify endpoint should accept any valid, non-expired token regardless of
+        which config was active when it was issued.
+        """
+        from gimnasioApp.views import CookieTokenVerifyView
+        from rest_framework_simplejwt.tokens import AccessToken
+        from datetime import timedelta
+        from django.utils import timezone
+        
+        # Create a token with exp = now + 25 minutes (valid under old 30min config)
+        access = AccessToken.for_user(self.user)
+        access.payload['exp'] = int((timezone.now() + timedelta(minutes=25)).timestamp())
+        
+        auth_header = f'Bearer {access}'
+        
+        request = self._make_verify_request(auth_header)
+        view = CookieTokenVerifyView.as_view()
+        response = view(request)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('valid', response.data)
+        self.assertTrue(response.data['valid'])
+        self.assertIn('exp', response.data)
+
 
 class TokenVerifyIntegrationTest(TestCase):
     """Integration tests for token verify flow."""
