@@ -1,14 +1,12 @@
 import axios, { AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
-import { getAccessToken, setAccessToken, clearAccessToken } from '../../utils/authStorage';
+import { getAccessToken, setAccessToken, clearAccessToken, getCsrfCookie } from '../../utils/authStorage';
 import { refreshAccessToken } from './refreshToken.api';
-
-const baseURL = import.meta.env.MODE === 'development' 
-              ? import.meta.env.VITE_API_URL_DEV
-              : import.meta.env.VITE_API_URL_PROD;
+import { baseURL } from './axios.public';
 
 // Cliente público (sin token) - para login/register
 export const axiosPublic = axios.create({   
     baseURL,
+    withCredentials: true,  // Importante para enviar cookies
 });
 
 // Cliente privado (con token) - para endpoints protegidos
@@ -16,6 +14,22 @@ export const axiosPrivate = axios.create({
     baseURL,
     withCredentials: true,  // Importante para enviar cookies
 });
+
+// ─── CSRF Interceptor ───────────────────────────────────────────
+// Adds X-CSRF-Token header for mutating requests (POST, PUT, PATCH, DELETE)
+const MUTATING_METHODS = ['post', 'put', 'patch', 'delete'];
+
+axiosPrivate.interceptors.request.use(
+  (config) => {
+    const method = config.method?.toLowerCase();
+    if (method && MUTATING_METHODS.includes(method)) {
+      const csrfToken = getCsrfCookie('csrftoken');
+      config.headers['X-CSRF-Token'] = csrfToken ?? '';
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 // ─── JWT helpers ───────────────────────────────────────────────
 const decodeJwt = (token: string): Record<string, unknown> | null => {
@@ -149,31 +163,3 @@ axiosPrivate.interceptors.response.use(
     }
   }
 );
-
-// ─── Silent refresh ────────────────────────────────────────────
-// Refresca el access token cada 20 min para que no expire
-// mientras el usuario tenga la app abierta, incluso si no hace requests.
-let silentRefreshInterval: ReturnType<typeof setInterval> | null = null;
-
-export const startSilentRefresh = (intervalMs = 20 * 60 * 1000): void => {
-  stopSilentRefresh();
-  silentRefreshInterval = setInterval(async () => {
-    const token = getAccessToken();
-    if (!token) return; // No hay sesión activa
-
-    try {
-      const newToken = await refreshAccessToken();
-      setAccessToken(newToken);
-    } catch {
-      // Si falla el refresh silencioso, no hacemos nada.
-      // El response interceptor se encargará si llega un request real.
-    }
-  }, intervalMs);
-};
-
-export const stopSilentRefresh = (): void => {
-  if (silentRefreshInterval !== null) {
-    clearInterval(silentRefreshInterval);
-    silentRefreshInterval = null;
-  }
-};
