@@ -67,9 +67,10 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    # 'django.middleware.csrf.CsrfViewMiddleware',  # Disabled: using custom CSRF validation via validate_csrf()
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'gimnasioApp.middleware.GimnasioMiddleware',
+    'gimnasioApp.middleware.CSRFValidationMiddleware',  # Custom CSRF validation for API
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -186,14 +187,30 @@ AWS_S3_USE_PATH_STYLE_ENDPOINT = True  # Requerido para Supabase S3 (path-style)
 # 'staticfiles' DEBE estar siempre definido (requerido por Django 5.1+)
 # En desarrollo usamos el backend por defecto de Django.
 # En producción usamos WhiteNoise con compresión y cacheo de manifests.
-STORAGES = {
-    'default': {
-        'BACKEND': 'gimnasioApp.storage.SupabaseMediaStorage',
-    },
-    'staticfiles': {
-        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage' if not DEBUG else 'django.contrib.staticfiles.storage.StaticFilesStorage',
-    },
-}
+# En tests usamos FileSystemStorage local (no requiere credenciales AWS)
+_is_testing = 'test' in sys.argv or 'pytest' in sys.argv[0] if sys.argv else False
+
+if _is_testing:
+    STORAGES = {
+        'default': {
+            'BACKEND': 'django.core.files.storage.FileSystemStorage',
+            'OPTIONS': {
+                'location': os.path.join(BASE_DIR, 'test_media'),
+            },
+        },
+        'staticfiles': {
+            'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+        },
+    }
+else:
+    STORAGES = {
+        'default': {
+            'BACKEND': 'gimnasioApp.storage.SupabaseMediaStorage',
+        },
+        'staticfiles': {
+            'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage' if not DEBUG else 'django.contrib.staticfiles.storage.StaticFilesStorage',
+        },
+    }
 
 # STATIC_ROOT solo se necesita para producción (collectstatic)
 if not DEBUG:   
@@ -237,8 +254,8 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
 }
 
-# CSRF Enforcement feature flag (False for gradual rollout, log-only mode)
-CSRF_ENFORCE = False
+# CSRF Enforcement feature flag (True = enforce mode)
+CSRF_ENFORCE = True
 
 # CORS Configuration actualizada para cookies
 CORS_ALLOW_CREDENTIALS = True
