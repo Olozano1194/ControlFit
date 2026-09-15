@@ -5,7 +5,6 @@ import SideBar from "../components/SideBar";
 import Header from "../components/Header";
 import { useAuth } from "../context/useAuth";
 import { useInactivityTimeout } from "../hooks/useInactivityTimeout";
-import { startSilentRefresh, stopSilentRefresh } from "../api/axios/axios.private";
 
 const INACTIVITY_MINUTES = 30;
 
@@ -13,12 +12,6 @@ function LayoutAdmin() {
     const { logout } = useAuth();
     const location = useLocation();
     const { resetTimer } = useInactivityTimeout(INACTIVITY_MINUTES, logout);
-
-    // Silent refresh: mantiene el access token vivo cada 20 min
-    useEffect(() => {
-        startSilentRefresh();
-        return () => stopSilentRefresh();
-    }, []);
 
     // Reiniciar timer también al navegar entre módulos
     const prevPath = useRef(location.pathname);
