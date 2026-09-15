@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 import os
+import sys
 import dj_database_url
 from dotenv import load_dotenv
 load_dotenv()  # cargamos las variables de entorno desde .env
@@ -66,9 +67,10 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    # 'django.middleware.csrf.CsrfViewMiddleware',  # Disabled: using custom CSRF validation via validate_csrf()
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'gimnasioApp.middleware.GimnasioMiddleware',
+    'gimnasioApp.middleware.CSRFValidationMiddleware',  # Custom CSRF validation for API
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -97,25 +99,36 @@ WSGI_APPLICATION = 'gimnasio.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+# Use SQLite in-memory for tests (fast, no external dependencies)
+# Check if running tests via manage.py test or pytest
+_is_testing = 'test' in sys.argv or 'pytest' in sys.argv[0] if sys.argv else False
 
-DATABASES = {
-    # 'default': {
-    #     'ENGINE': 'django.db.backends.mysql',
-    #     'NAME': 'gimnasioreact',
-    #     'USER': 'root',
-    #     'PASSWORD': '123456',
-    #     'HOST': 'localhost',
-    #     'PORT': '3306'
-        
-    # }
-    # Replace the SQLite DATABASES configuration with PostgreSQL:
-    'default': dj_database_url.config(
-        # Replace this value with your local database's connection string.
+if _is_testing:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': ':memory:',
+        }
+    }
+else:
+    # Base database config from DATABASE_URL (or default for CI)
+    _db_config = dj_database_url.config(
         default=os.getenv('DATABASE_URL'),
         conn_max_age=600,
-        ssl_require=not os.getenv('DEBUG', 'True') == 'True'       
+        ssl_require=not os.getenv('DEBUG', 'True') == 'True'
     )
-}
+    
+    # Test database: SQLite in-memory for fast local and CI tests
+    # This overrides the engine only for test runs
+    if 'TEST' not in _db_config:
+        _db_config['TEST'] = {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': ':memory:',
+        }
+    
+    DATABASES = {
+        'default': _db_config
+    }
 
 
 # Password validation
@@ -174,14 +187,30 @@ AWS_S3_USE_PATH_STYLE_ENDPOINT = True  # Requerido para Supabase S3 (path-style)
 # 'staticfiles' DEBE estar siempre definido (requerido por Django 5.1+)
 # En desarrollo usamos el backend por defecto de Django.
 # En producción usamos WhiteNoise con compresión y cacheo de manifests.
-STORAGES = {
-    'default': {
-        'BACKEND': 'gimnasioApp.storage.SupabaseMediaStorage',
-    },
-    'staticfiles': {
-        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage' if not DEBUG else 'django.contrib.staticfiles.storage.StaticFilesStorage',
-    },
-}
+# En tests usamos FileSystemStorage local (no requiere credenciales AWS)
+_is_testing = 'test' in sys.argv or 'pytest' in sys.argv[0] if sys.argv else False
+
+if _is_testing:
+    STORAGES = {
+        'default': {
+            'BACKEND': 'django.core.files.storage.FileSystemStorage',
+            'OPTIONS': {
+                'location': os.path.join(BASE_DIR, 'test_media'),
+            },
+        },
+        'staticfiles': {
+            'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+        },
+    }
+else:
+    STORAGES = {
+        'default': {
+            'BACKEND': 'gimnasioApp.storage.SupabaseMediaStorage',
+        },
+        'staticfiles': {
+            'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage' if not DEBUG else 'django.contrib.staticfiles.storage.StaticFilesStorage',
+        },
+    }
 
 # STATIC_ROOT solo se necesita para producción (collectstatic)
 if not DEBUG:   
@@ -212,8 +241,8 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=3),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
@@ -224,6 +253,9 @@ SIMPLE_JWT = {
     'USER_ID_FIELD': 'id',
     'USER_ID_CLAIM': 'user_id',
 }
+
+# CSRF Enforcement feature flag (True = enforce mode)
+CSRF_ENFORCE = True
 
 # CORS Configuration actualizada para cookies
 CORS_ALLOW_CREDENTIALS = True

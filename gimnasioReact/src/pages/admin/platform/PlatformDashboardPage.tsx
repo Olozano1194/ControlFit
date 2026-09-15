@@ -141,7 +141,7 @@ const PlatformDashboardPage = () => {
                         </div>
                         <div>
                             <p className="text-xs text-gray-500 uppercase tracking-wider">Retención Promedio</p>
-                            <p className="text-lg font-bold text-gray-900">{Number(stats.retencion_promedio).toFixed(1)}%</p>
+                            <p className="text-lg font-bold text-gray-900">{stats.retencion_promedio}%</p>
                         </div>
                     </div>
                 </div>

@@ -5,7 +5,6 @@ import SideBarPlatform from "../components/SideBarPlatform";
 import Header from "../components/Header";
 import { useAuth } from "../context/useAuth";
 import { useInactivityTimeout } from "../hooks/useInactivityTimeout";
-import { startSilentRefresh, stopSilentRefresh } from "../api/axios/axios.private";
 
 const INACTIVITY_MINUTES = 30;
 
@@ -13,11 +12,6 @@ function LayoutPlatform() {
     const { logout } = useAuth();
     const location = useLocation();
     const { resetTimer } = useInactivityTimeout(INACTIVITY_MINUTES, logout);
-
-    useEffect(() => {
-        startSilentRefresh();
-        return () => stopSilentRefresh();
-    }, []);
 
     const prevPath = useRef(location.pathname);
     useEffect(() => {

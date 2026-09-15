@@ -18,6 +18,13 @@ export default defineConfig({
     },
   },
   server: {
+    proxy: {
+      '/gym/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
     watch: {
       // Ignore the corrupted leftover folder until it can be deleted (chkdsk /f).
       ignored: ['**/node_modules_corrupto/**'],

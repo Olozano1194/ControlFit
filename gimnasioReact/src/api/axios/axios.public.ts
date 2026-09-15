@@ -11,3 +11,6 @@ export const axiosPublic = axios.create({
         'Content-Type': 'application/json',
     },
 });  
+
+// Re-export for axios.private.ts to avoid circular imports
+export { baseURL };  

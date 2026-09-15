@@ -439,6 +439,12 @@ class DemoRequestSerializer(serializers.ModelSerializer):
         # Como es fire-and-forget, no podemos garantizar entrega
         # Retornamos True si gym_creado existe (email fue disparado)
         return obj.gym_creado is not None
+    
+    def validate_estado(self, value):
+        """Reject modifications to cancelled requests."""
+        if self.instance and self.instance.estado == 'cancelada':
+            raise serializers.ValidationError("No se puede modificar una solicitud cancelada.")
+        return value
 
 
 # ============================================================
@@ -453,7 +459,7 @@ class PlatformStatsSerializer(serializers.Serializer):
     demo_contactados = serializers.IntegerField()
     ingresos_mes_global = serializers.DecimalField(max_digits=14, decimal_places=2)
     miembros_activos_global = serializers.IntegerField()
-    retencion_promedio = serializers.DecimalField(max_digits=5, decimal_places=1)
+    retencion_promedio = serializers.DecimalField(max_digits=5, decimal_places=1, coerce_to_string=False)
 
 
 class UsuarioPlatformSerializer(serializers.ModelSerializer):

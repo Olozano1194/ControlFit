@@ -17,9 +17,8 @@ from ..models import EventoCalendario, MembresiaAsignada, Notification
 LINK_MEMBRESIAS = '/dashboard/asignar-membresia-list'
 LINK_CALENDARIO = '/dashboard/calendar'
 
-# Prefijo de país hardcodeado para WhatsApp (Colombia). Se preserva del
-# comportamiento legacy; parametrizarlo queda para un cambio futuro.
-PREFIJO_WHATSAPP = '57'
+# Prefijo de país por defecto para WhatsApp (Colombia).
+DEFAULT_WHATSAPP_COUNTRY_CODE = '57'
 
 
 class NotificationManager:
@@ -94,7 +93,9 @@ class NotificationManager:
                 "para%20que%20renueves%20y%20continúes%20entrenando%21"
             )
 
-        whatsapp_link = cls._construir_whatsapp_link(membership.miembro.phone, wa_message)
+        whatsapp_link = cls._construir_whatsapp_link(
+            membership.miembro.phone, wa_message, gimnasio.country_code
+        )
 
         Notification.objects.get_or_create(
             gimnasio=gimnasio,
@@ -128,9 +129,10 @@ class NotificationManager:
         )
 
     @staticmethod
-    def _construir_whatsapp_link(phone, wa_message):
-        """Construye el enlace wa.me con prefijo 57; None si no hay teléfono."""
+    def _construir_whatsapp_link(phone, wa_message, country_code=None):
+        """Construye el enlace wa.me con prefijo de país; None si no hay teléfono."""
         phone_clean = ''.join(filter(str.isdigit, phone or ''))
-        if phone_clean and not phone_clean.startswith(PREFIJO_WHATSAPP):
-            phone_clean = PREFIJO_WHATSAPP + phone_clean
+        prefix = country_code or DEFAULT_WHATSAPP_COUNTRY_CODE
+        if phone_clean and not phone_clean.startswith(prefix):
+            phone_clean = prefix + phone_clean
         return f"https://wa.me/{phone_clean}?text={wa_message}" if phone_clean else None

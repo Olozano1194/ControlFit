@@ -5,9 +5,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
-from .auth_cookie import set_refresh_cookie, clear_refresh_cookie
+from .auth_cookie import set_refresh_cookie, clear_refresh_cookie, set_csrf_cookie, clear_csrf_cookie, get_csrf_token
 from .serializers import UsuarioSerializer, UsuarioGymSerializer, UsuarioGymDaySerializer, MembresiasSerializer, MembresiaAsignadaSerializer, PagoMembresiaSerializer, TipoEventoSerializer, EventoCalendarioSerializer, NotificationSerializer, PasswordChangeSerializer
 from .models import Usuario, UsuarioGym, UsuarioGymDay, Membresia, MembresiaAsignada, PagoMembresia, Gimnasio, TipoEvento, EventoCalendario, Notification
 from django.utils import timezone
@@ -30,6 +30,56 @@ from decimal import Decimal
 from django.db.models import Sum
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
+import logging
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================
+# CSRF VALIDATION
+# ============================================================
+
+def validate_csrf(request):
+    """Validate CSRF token from X-CSRF-Token header against csrftoken cookie.
+    
+    In log-only mode (CSRF_ENFORCE=False): logs violations but allows request.
+    In enforce mode (CSRF_ENFORCE=True): returns False for missing/mismatched tokens.
+    
+    GET requests always bypass validation.
+    Mutating methods (POST, PUT, PATCH, DELETE) require validation.
+    
+    Returns:
+        bool: True if validation passes (or is bypassed), False if validation fails in enforce mode.
+    """
+    # GET requests bypass CSRF validation
+    if request.method == 'GET':
+        return True
+    
+    # Only validate mutating methods
+    if request.method not in ('POST', 'PUT', 'PATCH', 'DELETE'):
+        return True
+    
+    csrf_header = request.META.get('HTTP_X_CSRF_TOKEN')
+    csrf_cookie = get_csrf_token(request)
+    
+    # Check if tokens match
+    is_valid = csrf_header is not None and csrf_cookie is not None and csrf_header == csrf_cookie
+    
+    if not is_valid:
+        logger.warning(
+            'CSRF validation failed: method=%s path=%s header_present=%s cookie_present=%s',
+            request.method,
+            request.path,
+            csrf_header is not None,
+            csrf_cookie is not None
+        )
+        
+        # In enforce mode, reject the request
+        if getattr(settings, 'CSRF_ENFORCE', False):
+            return False
+    
+    return True
 
 
 # ============================================================
@@ -95,6 +145,25 @@ class UserViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
 # Registro público para crear usuario inicial
 # El login se maneja con SimpleJWT en /token/ (TokenObtainPairView)
 class RegisterViewSet(APIView):
+    """Public self-service registration endpoint.
+
+    INTENTIONAL: This endpoint uses AllowAny permission to allow gym owners
+    to create their account without prior authentication. This is by design.
+
+    Threat Model:
+    - Spam registrations: Mitigated by email uniqueness constraint and
+      automatic gym creation (each registration creates a Gimnasio record).
+      Rate limiting SHOULD be added in a future phase.
+    - Abuse: Each registration creates a full gym + admin user. Consider
+      CAPTCHA or email verification in future hardening.
+    - Data exposure: Only returns user data for the created account.
+      No cross-tenant data leakage possible.
+
+    Protections in place:
+    - Email uniqueness (database constraint + serializer validation)
+    - Password hashing (set_password via AbstractBaseUser)
+    - No sensitive data exposed in response
+    """
     permission_classes = [AllowAny]
     
     def post(self, request, *args, **kwargs):
@@ -139,6 +208,7 @@ class RegisterViewSet(APIView):
         
         # Establecer refresh token como cookie HttpOnly (helper compartido)
         set_refresh_cookie(response, refresh)
+        set_csrf_cookie(response, refresh)
         
         return response
 
@@ -157,6 +227,7 @@ class CookieTokenObtainPairView(TokenObtainPairView):
             refresh = response.data.get('refresh')
             if refresh:
                 set_refresh_cookie(response, refresh)
+                set_csrf_cookie(response, refresh)  # Use refresh as CSRF token source
                 del response.data['refresh']  # Nunca exponer el refresh en el body
         return response
 
@@ -182,6 +253,7 @@ class CookieTokenRefreshView(TokenRefreshView):
         new_refresh = response.data.get('refresh')
         if new_refresh:
             set_refresh_cookie(response, new_refresh)
+            set_csrf_cookie(response, new_refresh)  # Set new CSRF cookie with rotated refresh
             del response.data['refresh']
         return response
 
@@ -200,7 +272,52 @@ class LogoutView(APIView):
                 pass
         response = Response({'detail': 'Logged out'})
         clear_refresh_cookie(response)
+        clear_csrf_cookie(response)
         return response
+
+
+# ============================================================
+# TOKEN VERIFY ENDPOINT
+# ============================================================
+
+class CookieTokenVerifyView(APIView):
+    """Verify: lee el access token del header Authorization, valida y devuelve {valid: true, exp: timestamp} o 401.
+    
+    Accepts both GET and POST for compatibility. GET is preferred (read-only, no CSRF needed).
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return self._verify(request)
+
+    def post(self, request):
+        return self._verify(request)
+
+    def _verify(self, request):
+        # Extract token from Authorization header
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if not auth_header.startswith('Bearer '):
+            return Response(
+                {'detail': 'Authorization header missing or invalid'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        token_str = auth_header[7:]  # Remove 'Bearer ' prefix
+        
+        # Validate the access token
+        try:
+            access_token = AccessToken(token_str, verify=True)
+        except (TokenError, InvalidToken):
+            return Response(
+                {'detail': 'Token is invalid or expired'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Return valid response with exp timestamp
+        return Response({
+            'valid': True,
+            'exp': access_token.payload.get('exp')
+        }, status=status.HTTP_200_OK)
 
 
 # ============================================================
@@ -909,16 +1026,16 @@ logger = logging.getLogger(__name__)
 class DemoRequestViewSet(viewsets.ModelViewSet):
     """
     Endpoint para recibir solicitudes de demo desde la landing/login.
-    POST público (sin autenticar). GET y PATCH solo para superadmins autenticados.
+    POST público (sin autenticar). GET, PATCH y DELETE solo para superadmins autenticados.
     """
     queryset = DemoRequest.objects.all()
     serializer_class = DemoRequestSerializer
-    http_method_names = ['get', 'post', 'patch', 'options']
+    http_method_names = ['get', 'post', 'patch', 'delete', 'options']
 
     def get_permissions(self):
         if self.request.method == 'POST':
             return [AllowAny()]
-        # PATCH y GET requieren superadmin
+        # PATCH, GET y DELETE requieren superadmin
         return [IsAuthenticated(), IsSuperAdmin()]
 
     def perform_create(self, serializer):
@@ -966,6 +1083,19 @@ class DemoRequestViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
+    def destroy(self, request, *args, **kwargs):
+        """Soft delete: sets estado='cancelada' instead of hard delete."""
+        demo = self.get_object()
+        if demo.estado == 'cancelada':
+            return Response(
+                {'detail': 'La solicitud ya está cancelada.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        demo.estado = 'cancelada'
+        demo.save(update_fields=['estado'])
+        serializer = self.get_serializer(demo)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 # ============================================================
 # PLATFORM — SUPERADMIN VIEWS
@@ -994,12 +1124,12 @@ class PlatformStatsView(APIView):
             prev_month = mes_actual - 1
             prev_year = anio_actual
 
-        # Total gyms
-        total_gimnasios = Gimnasio.objects.count()
-        gimnasios_activos = Gimnasio.objects.filter(is_active=True).count()
+        # Total gyms - use all_objects for total, objects already filters active
+        total_gimnasios = Gimnasio.all_objects.count()
+        gimnasios_activos = Gimnasio.objects.count()
 
-        # Staff total (admin + recepcion + superadmin)
-        total_usuarios_staff = Usuario.objects.count()
+        # Staff total (admin + recepcion + superadmin) - use all_objects for total
+        total_usuarios_staff = Usuario.all_objects.count()
 
         # Demo requests
         demo_pendientes = DemoRequest.objects.filter(estado='pendiente').count()
@@ -1078,11 +1208,11 @@ class GimnasioPlatformViewSet(viewsets.ModelViewSet):
     """CRUD de gimnasios para superadmin (sin filtro multi-tenant).
     
     List: solo gimnasios activos (is_active=True)
-    Retrieve/Update/Delete: permite acceder a cualquier gym por ID
+    Retrieve/Update/Delete: permite acceder a cualquier gym por ID (incluye inactivos para poder reactivarlos)
     """
     permission_classes = [IsAuthenticated, IsSuperAdmin, RequirePasswordChange]
     pagination_class = PlatformPagination
-    queryset = Gimnasio.objects.all().order_by('-created_at')
+    queryset = Gimnasio.all_objects.all().order_by('-created_at')
     filter_backends = [DjangoFilterBackend, SearchFilter]
     search_fields = ['name', 'address', 'phone']
 

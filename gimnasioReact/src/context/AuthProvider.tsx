@@ -3,7 +3,7 @@ import { AuthContext } from './AuthContext';
 import { login as loginApi } from '../api/users/authUser.api';
 import { getAccessToken, setAccessToken, clearAccessToken } from '../utils/authStorage';
 import { axiosPublic } from '../api/axios/axios.public';
-import { refreshAccessToken } from '../api/axios/refreshToken.api';
+import { refreshAccessToken, verifyToken } from '../api/axios/refreshToken.api';
 import type { LoginUserDto } from '../model/dto/user.dto';
 import type { UserRole } from '../components/sideBar/components/SideBarMenus';
 import { AuthUser } from '../model/dto/user.dto';
@@ -37,8 +37,31 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         return;
       }
 
-      setIsAuthenticated(true);
-      await loadUser();
+      // Con access token: verificar silenciosamente con el backend
+      try {
+        const result = await verifyToken();
+        if (!result.valid) {
+          // Token inválido: limpiar y redirigir a login
+          clearAccessToken();
+          window.location.href = '/login';
+          return;
+        }
+        // Token válido: continuar
+        setIsAuthenticated(true);
+        await loadUser();
+      } catch (error: any) {
+        // Error 401: token expirado/inválido → limpiar y redirigir
+        if (error.response?.status === 401) {
+          clearAccessToken();
+          window.location.href = '/login';
+          return;
+        }
+        // Error de red: no redirigir, mantener la sesión local
+        // El response interceptor manejará 401 en requests reales
+        console.warn('Silent token verification failed (network error):', error);
+        setIsAuthenticated(true);
+        await loadUser();
+      }
     };
     initAuth();
     // eslint-disable-next-line react-hooks/exhaustive-deps

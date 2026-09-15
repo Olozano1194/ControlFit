@@ -15,6 +15,12 @@ REFRESH_COOKIE_MAX_AGE = 604800  # 7 days
 # que el logout pueda leerla y blacklistear el refresh server-side.
 REFRESH_COOKIE_PATH = '/gym/api/v1/'
 
+# CSRF cookie configuration
+CSRF_COOKIE_KEY = 'csrftoken'
+CSRF_COOKIE_MAX_AGE = 86400  # 1 day
+# Path=/ para que JavaScript pueda leerla desde cualquier ruta del frontend
+CSRF_COOKIE_PATH = '/'
+
 
 def set_refresh_cookie(response, refresh_token):
     """Set the refresh token as an HttpOnly cookie on the given response."""
@@ -36,3 +42,37 @@ def clear_refresh_cookie(response):
         path=REFRESH_COOKIE_PATH,
         samesite='None' if not settings.DEBUG else 'Lax',
     )
+
+
+def set_csrf_cookie(response, token):
+    """Set the CSRF token as a JavaScript-readable cookie on the given response.
+    
+    The cookie is NOT HttpOnly (so JS can read it for double-submit pattern),
+    and uses SameSite=Lax in development, SameSite=None + Secure in production.
+    """
+    response.set_cookie(
+        key=CSRF_COOKIE_KEY,
+        value=str(token),
+        max_age=CSRF_COOKIE_MAX_AGE,
+        httponly=False,  # JavaScript-readable for double-submit pattern
+        secure=not settings.DEBUG,
+        samesite='None' if not settings.DEBUG else 'Lax',
+        path=CSRF_COOKIE_PATH,
+    )
+
+
+def clear_csrf_cookie(response):
+    """Clear the CSRF token cookie, mirroring the attributes used when setting it."""
+    response.delete_cookie(
+        key=CSRF_COOKIE_KEY,
+        path=CSRF_COOKIE_PATH,
+        samesite='None' if not settings.DEBUG else 'Lax',
+    )
+
+
+def get_csrf_token(request):
+    """Extract the CSRF token from the request cookies.
+    
+    Returns the token string if present, None otherwise.
+    """
+    return request.COOKIES.get(CSRF_COOKIE_KEY)

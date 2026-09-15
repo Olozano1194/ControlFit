@@ -15,7 +15,7 @@ export type DemoRequest = {
     email: string;
     telefono: string;
     nombre_gimnasio: string;
-    estado: 'pendiente' | 'contactado';
+    estado: 'pendiente' | 'contactado' | 'cancelada';
     fecha_solicitud: string;
     gym_creado: GimnasioCreado | null;
     email_sent: boolean;
@@ -28,5 +28,10 @@ export const getDemoRequests = async (): Promise<DemoRequest[]> => {
 
 export const updateDemoRequestEstado = async (id: number, estado: 'pendiente' | 'contactado'): Promise<DemoRequest> => {
     const response = await axiosPrivate.patch<DemoRequest>(`/solicitudes-demo/${id}/`, { estado });
+    return response.data;
+};
+
+export const deleteDemoRequest = async (id: number): Promise<DemoRequest> => {
+    const response = await axiosPrivate.delete<DemoRequest>(`/solicitudes-demo/${id}/`);
     return response.data;
 };
