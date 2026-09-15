@@ -281,10 +281,19 @@ class LogoutView(APIView):
 # ============================================================
 
 class CookieTokenVerifyView(APIView):
-    """Verify: lee el access token del header Authorization, valida y devuelve {valid: true, exp: timestamp} o 401."""
+    """Verify: lee el access token del header Authorization, valida y devuelve {valid: true, exp: timestamp} o 401.
+    
+    Accepts both GET and POST for compatibility. GET is preferred (read-only, no CSRF needed).
+    """
     permission_classes = [AllowAny]
 
+    def get(self, request):
+        return self._verify(request)
+
     def post(self, request):
+        return self._verify(request)
+
+    def _verify(self, request):
         # Extract token from Authorization header
         auth_header = request.META.get('HTTP_AUTHORIZATION', '')
         if not auth_header.startswith('Bearer '):
