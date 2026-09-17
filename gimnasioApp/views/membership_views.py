@@ -3,7 +3,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
 from rest_framework.permissions import IsAuthenticated
 from ..serializers.membership_serializer import MembresiasSerializer, MembresiaAsignadaSerializer
-from ..models import Membresia, MembresiaAsignada
+from ..models.membership_model import Membresia, MembresiaAsignada
 from ..permissions import IsRecepcionUser, RequirePasswordChange
 from ..mixins import MultiTenantViewSetMixin
 

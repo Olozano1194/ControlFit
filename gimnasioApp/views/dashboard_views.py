@@ -7,7 +7,9 @@ from django.db.models import Sum
 from decimal import Decimal
 from datetime import datetime, date
 # from ..serializers import MembresiasSerializer
-from ..models import MembresiaAsignada, UsuarioGymDay, PagoMembresia
+from ..models.membership_model import MembresiaAsignada
+from ..models.payment_model import PagoMembresia
+from ..models.member_model import UsuarioGymDay
 from ..permissions import RequirePasswordChange
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side

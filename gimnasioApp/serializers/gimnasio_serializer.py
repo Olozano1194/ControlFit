@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models import Gimnasio
+from ..models.gym_model import Gimnasio
 
 
 class GimnasioSerializer(serializers.ModelSerializer):

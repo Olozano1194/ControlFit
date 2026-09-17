@@ -6,7 +6,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
 from ..serializers.member_serializer import UsuarioGymSerializer, UsuarioGymDaySerializer
 from ..serializers.profile_serializer import UsuarioSerializer
-from ..models import Usuario, UsuarioGym, UsuarioGymDay
+from ..models.user_model import Usuario
+from ..models.member_model import UsuarioGym, UsuarioGymDay
 from ..permissions import IsAdminUser, IsRecepcionUser, RequirePasswordChange
 from ..mixins import MultiTenantViewSetMixin
 

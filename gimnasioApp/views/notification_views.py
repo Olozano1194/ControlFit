@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from django.utils import timezone
 from ..serializers.notification_serializer import NotificationSerializer
-from ..models import Notification
+from ..models.notification_model import Notification
 from ..permissions import IsRecepcionUser, RequirePasswordChange
 from ..mixins import MultiTenantViewSetMixin
 from ..services.notifications import NotificationManager

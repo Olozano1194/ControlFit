@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from ..serializers.profile_serializer import UsuarioSerializer
-from ..models import Usuario
+from ..models.user_model import Usuario
 from ..permissions import RequirePasswordChange
 
 

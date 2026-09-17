@@ -12,7 +12,12 @@ from ..serializers.platform_serializer import (
     DemoRequestSerializer, PlatformStatsSerializer,
     GimnasioPlatformSerializer, GimnasioPlatformDetailSerializer,
 )
-from ..models import DemoRequest, Gimnasio, MembresiaAsignada, PagoMembresia, UsuarioGymDay, Usuario
+from ..models.membership_model import MembresiaAsignada
+from ..models.payment_model import PagoMembresia
+from ..models.gym_model import Gimnasio
+from ..models.demo_model import DemoRequest
+from ..models.user_model import Usuario
+from ..models.member_model import UsuarioGymDay
 from ..permissions import IsSuperAdmin, RequirePasswordChange
 from .utils import PlatformPagination
 from ..services.onboarding import provision_gym_from_demo, revert_gym_from_demo

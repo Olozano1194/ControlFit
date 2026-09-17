@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.core.exceptions import ValidationError as DjangoValidationError
 from .helper_error import _catch_model_error
-from ..models import Membresia, MembresiaAsignada
+from ..models.membership_model import Membresia, MembresiaAsignada
 from .member_serializer import UsuarioGymSerializer
 from datetime import timedelta
 from decimal import Decimal

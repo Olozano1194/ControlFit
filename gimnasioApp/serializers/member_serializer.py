@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.db import transaction
-from ..models import UsuarioGym, UsuarioGymDay, Membresia, MembresiaAsignada
+from ..models.member_model import UsuarioGym, UsuarioGymDay
+from ..models.membership_model import Membresia, MembresiaAsignada
 from django.core.exceptions import ValidationError as DjangoValidationError
 from .helper_error import _catch_model_error
 from datetime import date
