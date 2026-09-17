@@ -8,7 +8,7 @@ from django.db.models import Count, Q, Sum
 from django.db import transaction
 from datetime import date, timedelta
 from decimal import Decimal
-from ..serializers import (
+from ..serializers.platform_serializer import (
     DemoRequestSerializer, PlatformStatsSerializer,
     GimnasioPlatformSerializer, GimnasioPlatformDetailSerializer,
 )

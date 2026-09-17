@@ -4,7 +4,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
-from ..serializers import UsuarioSerializer, UsuarioGymSerializer, UsuarioGymDaySerializer
+from ..serializers.member_serializer import UsuarioGymSerializer, UsuarioGymDaySerializer
+from ..serializers.profile_serializer import UsuarioSerializer
 from ..models import Usuario, UsuarioGym, UsuarioGymDay
 from ..permissions import IsAdminUser, IsRecepcionUser, RequirePasswordChange
 from ..mixins import MultiTenantViewSetMixin

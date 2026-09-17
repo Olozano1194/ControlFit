@@ -5,8 +5,8 @@ from django.http import JsonResponse, HttpResponse
 from django.utils import timezone
 from django.db.models import Sum
 from decimal import Decimal
-from datetime import datetime, date, timedelta
-from ..serializers import MembresiasSerializer
+from datetime import datetime, date
+# from ..serializers import MembresiasSerializer
 from ..models import MembresiaAsignada, UsuarioGymDay, PagoMembresia
 from ..permissions import RequirePasswordChange
 from openpyxl import Workbook
