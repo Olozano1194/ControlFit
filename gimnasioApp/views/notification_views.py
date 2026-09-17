@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from django.utils import timezone
-from ..serializers import NotificationSerializer
+from ..serializers.notification_serializer import NotificationSerializer
 from ..models import Notification
 from ..permissions import IsRecepcionUser, RequirePasswordChange
 from ..mixins import MultiTenantViewSetMixin

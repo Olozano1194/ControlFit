@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.shortcuts import get_object_or_404
-from ..serializers import TipoEventoSerializer, EventoCalendarioSerializer
+from ..serializers.calendar_serializer import TipoEventoSerializer, EventoCalendarioSerializer
 from ..models import TipoEvento, EventoCalendario, Gimnasio
 from ..permissions import IsAdminUser, IsRecepcionUser, RequirePasswordChange
 from ..mixins import MultiTenantViewSetMixin

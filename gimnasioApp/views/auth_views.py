@@ -7,7 +7,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from ..auth_cookie import set_refresh_cookie, clear_refresh_cookie, set_csrf_cookie, clear_csrf_cookie
-from ..serializers import UsuarioSerializer, PasswordChangeSerializer
+from ..serializers.profile_serializer import UsuarioSerializer
+from ..serializers.auth_serializer import PasswordChangeSerializer
 from ..models import Gimnasio
 
 
