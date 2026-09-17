@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models import TipoEvento, EventoCalendario
+from ..models.calendar_model import TipoEvento, EventoCalendario
 
 
 

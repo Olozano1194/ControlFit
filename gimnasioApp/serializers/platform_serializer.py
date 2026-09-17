@@ -1,5 +1,9 @@
 from rest_framework import serializers
-from ..models import Gimnasio, Usuario, UsuarioGym, PagoMembresia,DemoRequest
+from ..models.gym_model import Gimnasio
+from ..models.user_model import Usuario
+from ..models.member_model import UsuarioGym
+from ..models.payment_model import PagoMembresia
+from ..models.demo_model import DemoRequest
 
 
 

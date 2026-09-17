@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from ..models import Gimnasio, Usuario
+from ..models.gym_model import Gimnasio
+from ..models.user_model import Usuario
 
 
 class UsuarioSerializer(serializers.ModelSerializer):

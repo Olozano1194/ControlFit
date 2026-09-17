@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models import PagoMembresia
+from ..models.payment_model import PagoMembresia
 
 
 
