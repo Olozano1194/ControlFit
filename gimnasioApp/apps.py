@@ -15,8 +15,10 @@ class GimnasioappConfig(AppConfig):
         # Importar señales para seed de membresías por defecto (siempre)
         import gimnasioApp.signals  # noqa: F401
 
-        # Avoid running demo admin creation during management commands
+        # Avoid running demo admin creation during management commands or pytest
         if len(sys.argv) >= 2 and sys.argv[1] in ['migrate', 'makemigrations', 'collectstatic', 'test']:
+            return
+        if os.environ.get('PYTEST_CURRENT_TEST'):
             return
 
         self._create_demo_admin()
@@ -27,10 +29,16 @@ class GimnasioappConfig(AppConfig):
         Uses environment variables for credentials.
         """
         from .models import Usuario, Gimnasio
+        from django.db.utils import OperationalError
         
         # Check if admin already exists
-        if Usuario.objects.filter(roles='admin').exists():
-            logger.info("Admin user already exists, skipping creation.")
+        try:
+            if Usuario.objects.filter(roles='admin').exists():
+                logger.info("Admin user already exists, skipping creation.")
+                return
+        except OperationalError:
+            # Tables don't exist yet (e.g., during pytest collection before migrations)
+            logger.info("Database tables not ready, skipping demo admin creation.")
             return
         
         try:
