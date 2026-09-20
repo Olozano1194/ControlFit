@@ -1,16 +1,25 @@
 from rest_framework.permissions import BasePermission
 
+ADMIN_ROLES = {'admin', 'superadmin'}
+ALL_ROLES   = {'admin', 'recepcion', 'superadmin'}
+
+
+def _has_any_role(user, allowed: set) -> bool:
+    """Returns True if the user has at least one role in `allowed`.
+    Handles both list-type (ArrayField) and string-type roles fields.
+    """
+    roles = getattr(user, 'roles', None) or []
+    if isinstance(roles, str):
+        roles = [roles]
+    return bool(set(roles) & allowed)
+
 
 class IsAdminUser(BasePermission):
     """
     Permiso personalizado: Solo usuarios con rol 'admin' o 'superadmin' pueden acceder.
     """
     def has_permission(self, request, view):
-        return (
-            request.user 
-            and request.user.is_authenticated 
-            and request.user.roles in ['admin', 'superadmin']
-        )
+        return request.user and request.user.is_authenticated and _has_any_role(request.user, ADMIN_ROLES)
 
 
 class IsRecepcionUser(BasePermission):
@@ -21,14 +30,14 @@ class IsRecepcionUser(BasePermission):
     def has_permission(self, request, view):
         if not (request.user and request.user.is_authenticated):
             return False
-        return request.user.roles in ['admin', 'recepcion', 'superadmin']
-    
+        return _has_any_role(request.user, ALL_ROLES)
+
     def has_object_permission(self, request, view, obj):
         # superadmin y admin pueden todo
-        if request.user.roles in ['admin', 'superadmin']:
+        if _has_any_role(request.user, ADMIN_ROLES):
             return True
         # recepcionistas no pueden eliminar
-        if request.method == 'DELETE' and request.user.roles == 'recepcion':
+        if request.method == 'DELETE' and _has_any_role(request.user, {'recepcion'}):
             return False
         return True
 
@@ -39,15 +48,15 @@ class IsOwnerOrAdmin(BasePermission):
     o los admins pueden acceder a todos.
     """
     def has_object_permission(self, request, view, obj):
-        if request.user.roles == 'admin':
+        if _has_any_role(request.user, ADMIN_ROLES):
             return True
-        
+
         # Verificar si el objeto tiene usuario
         if hasattr(obj, 'user'):
             return obj.user == request.user
         if hasattr(obj, 'usuario'):
             return obj.usuario == request.user
-        
+
         return False
 
 
@@ -57,10 +66,11 @@ class IsSuperAdmin(BasePermission):
     """
     def has_permission(self, request, view):
         return (
-            request.user 
-            and request.user.is_authenticated 
-            and request.user.roles == 'superadmin'
+            request.user
+            and request.user.is_authenticated
+            and _has_any_role(request.user, {'superadmin'})
         )
+
 
 
 class RequirePasswordChange(BasePermission):
