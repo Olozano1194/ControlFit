@@ -3,6 +3,10 @@
     {
       "source": "/gym/api/:path*",
       "destination": "https://gimnasioreactdjango.onrender.com/gym/api/:path*"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/index.html"
     }
   ]
 }
