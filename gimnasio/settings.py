@@ -263,6 +263,17 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "https://controlfit.vercel.app",
 ]
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrf-token',
+    'x-requested-with',
+]
 CORS_EXPOSE_HEADERS = ['Content-Type', 'Authorization']
 
 # WhatsApp Configuration
