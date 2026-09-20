@@ -99,7 +99,12 @@ class CookieTokenObtainPairView(TokenObtainPairView):
             refresh = response.data.get('refresh')
             if refresh:
                 set_refresh_cookie(response, refresh)
-                set_csrf_cookie(response, refresh)  # Use refresh as CSRF token source
+                set_csrf_cookie(response, refresh)
+                # Return csrf_token in body so the frontend can store it in
+                # sessionStorage and send it as X-CSRF-Token even in cross-origin
+                # deployments (e.g. Vercel → Render) where document.cookie cannot
+                # read cookies set by a different domain.
+                response.data['csrf_token'] = refresh
                 del response.data['refresh']  # Nunca exponer el refresh en el body
         return response
 
@@ -125,9 +130,12 @@ class CookieTokenRefreshView(TokenRefreshView):
         new_refresh = response.data.get('refresh')
         if new_refresh:
             set_refresh_cookie(response, new_refresh)
-            set_csrf_cookie(response, new_refresh)  # Set new CSRF cookie with rotated refresh
+            set_csrf_cookie(response, new_refresh)
+            # Return csrf_token so frontend can update sessionStorage after rotation
+            response.data['csrf_token'] = new_refresh
             del response.data['refresh']
         return response
+
 
 
 class LogoutView(APIView):

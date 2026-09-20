@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { AuthContext } from './AuthContext';
 import { login as loginApi } from '../api/users/authUser.api';
-import { getAccessToken, setAccessToken, clearAccessToken } from '../utils/authStorage';
+import { getAccessToken, setAccessToken, clearAccessToken, setCsrfToken, clearCsrfToken } from '../utils/authStorage';
 import { axiosPublic } from '../api/axios/axios.public';
 import { refreshAccessToken, verifyToken } from '../api/axios/refreshToken.api';
 import type { LoginUserDto } from '../model/dto/user.dto';
@@ -125,6 +125,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
     
     clearAccessToken();
+    clearCsrfToken();
     setUser(null);
     setIsAuthenticated(false);
   }, []);
@@ -134,8 +135,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setError(null);
 
     try {
-      const accessToken = await loginApi(credentials);
-      setAccessToken(accessToken);
+      const { access, csrf_token } = await loginApi(credentials);
+      setAccessToken(access);
+      if (csrf_token) setCsrfToken(csrf_token);
       setIsAuthenticated(true);
       const loadedUser = await loadUser();
       return loadedUser;
