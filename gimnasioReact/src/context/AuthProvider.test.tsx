@@ -1,5 +1,16 @@
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Type for axios-like error with response
+interface AxiosError extends Error {
+  response?: {
+    status: number;
+    data?: unknown;
+  };
+  request?: unknown;
+  config?: unknown;
+  isAxiosError?: boolean;
+}
 
 vi.mock('../api/users/users.api', () => ({
     getUserProfile: vi.fn(),
@@ -23,7 +34,7 @@ import { useAuth } from './useAuth';
 import { getUserProfile } from '../api/users/users.api';
 import { login as loginApi } from '../api/users/authUser.api';
 import { verifyToken, refreshAccessToken } from '../api/axios/refreshToken.api';
-import { getAccessToken, setAccessToken, clearAccessToken } from '../utils/authStorage';
+import { getAccessToken } from '../utils/authStorage';
 import type { AuthUser } from '../model/dto/user.dto';
 
 const profileResponse = {
@@ -74,54 +85,60 @@ describe('AuthProvider', () => {
         it('redirects to login when verifyToken returns invalid', async () => {
             vi.mocked(getAccessToken).mockReturnValue('expired-token');
             vi.mocked(verifyToken).mockResolvedValue({ valid: false });
-            const originalLocation = window.location;
-            delete (window as any).location;
-            window.location = { href: '', assign: vi.fn() } as any;
+
+            const mockLocation = { href: '', assign: vi.fn() };
+            Object.defineProperty(window, 'location', {
+              value: mockLocation,
+              writable: true,
+              configurable: true,
+            });
 
             render(<AuthProvider><div>App</div></AuthProvider>);
 
             await waitFor(() => {
-                expect(window.location.href).toBe('/login');
+              expect(mockLocation.href).toBe('/login');
             });
-
-            window.location = originalLocation;
-        });
+          });
 
         it('redirects to login when verifyToken throws 401', async () => {
             vi.mocked(getAccessToken).mockReturnValue('expired-token');
-            const error = new Error('Unauthorized');
-            error.response = { status: 401 };
-            vi.mocked(verifyToken).mockRejectedValue(error);
-            const originalLocation = window.location;
-            delete (window as any).location;
-            window.location = { href: '', assign: vi.fn() } as any;
+            const axiosError: AxiosError = new Error('Unauthorized') as AxiosError;
+            axiosError.response = { status: 401 };
+            vi.mocked(verifyToken).mockRejectedValue(axiosError);
+
+            const mockLocation = { href: '', assign: vi.fn() };
+            Object.defineProperty(window, 'location', {
+              value: mockLocation,
+              writable: true,
+              configurable: true,
+            });
 
             render(<AuthProvider><div>App</div></AuthProvider>);
 
             await waitFor(() => {
-                expect(window.location.href).toBe('/login');
+              expect(mockLocation.href).toBe('/login');
             });
-
-            window.location = originalLocation;
-        });
+          });
 
         it('does NOT redirect on network error', async () => {
             vi.mocked(getAccessToken).mockReturnValue('valid-token');
-            const error = new Error('Network Error');
-            error.request = {};
-            vi.mocked(verifyToken).mockRejectedValue(error);
-            const originalLocation = window.location;
-            delete (window as any).location;
-            window.location = { href: '/dashboard', assign: vi.fn() } as any;
+            const axiosError: AxiosError = new Error('Network Error') as AxiosError;
+            axiosError.request = {};
+            vi.mocked(verifyToken).mockRejectedValue(axiosError);
+
+            const mockLocation = { href: '/dashboard', assign: vi.fn() };
+            Object.defineProperty(window, 'location', {
+              value: mockLocation,
+              writable: true,
+              configurable: true,
+            });
 
             render(<AuthProvider><div>App</div></AuthProvider>);
 
             await waitFor(() => {
-                expect(window.location.href).toBe('/dashboard');
+              expect(mockLocation.href).toBe('/dashboard');
             });
-
-            window.location = originalLocation;
-        });
+          });
 
         it('does NOT call verifyToken when no access token', async () => {
             vi.mocked(getAccessToken).mockReturnValue(null);

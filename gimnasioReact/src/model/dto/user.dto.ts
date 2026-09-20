@@ -16,10 +16,12 @@ export interface LoginUserDto {
 
 export type LoginResponse = {
     access: string;
+    csrf_token?: string;
 }
 
 export type RefreshResponse = {
     access: string;
+    csrf_token?: string;
 }
 
 export type BlacklistRequest = {

@@ -1,5 +1,3 @@
-
-
 const FooterSection = () => {
     return (
         <footer className="bg-slate-50/50 flex items-center justify-between mt-auto p-8">

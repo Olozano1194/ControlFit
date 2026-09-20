@@ -6,7 +6,7 @@ import {
 
 export const login = async (
   credentials: LoginUserDto
-): Promise<string> => {
+): Promise<LoginResponse> => {
   const { data } = await axiosPublic.post<LoginResponse>("/token/", credentials);
-  return data.access;
+  return data;
 };
