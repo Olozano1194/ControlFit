@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -32,6 +32,7 @@ export interface UseMemberFormReturn {
   miembros: Miembro[];
   membresias: Membresia[];
   selectedMembresia: Membresia | null;
+  asignacion: any; // AsignarMemberShips | null
   
   // Pricing (delegated to useMembershipPricing)
   multiplier: number;
@@ -41,6 +42,11 @@ export interface UseMemberFormReturn {
   estimatedPrice: number;
   totalDays: number;
   estimatedDateFinal: string;
+  
+  // Editing values (for display in disabled fields)
+  editingMembresiaId: string;
+  editingDateInitial: string;
+  isMembershipActive: boolean;
   
   // Handlers
   handleMemberShipsChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
@@ -105,6 +111,7 @@ export function useMemberForm(): UseMemberFormReturn {
     estimatedPrice,
     totalDays,
     estimatedDateFinal: estimatedDateFinalFromPricing,
+    setDateInitial,
   } = useMembershipPricing(null);
 
   const handleMultiplierChange = useCallback(
@@ -142,19 +149,55 @@ export function useMemberForm(): UseMemberFormReturn {
     return estimatedDateFinalFromPricing;
   }, [dateInitial, selectedMembresia, estimatedDateFinalFromPricing]);
 
+  // Compute editing values and membership status
+  const editingMembresiaId = useMemo(() => {
+    if (!asignacion) return '';
+    const membresiaId = asignacion.membresia?.id ?? asignacion.membresia_details?.id;
+    return membresiaId?.toString() ?? '';
+  }, [asignacion]);
+
+  const editingDateInitial = useMemo(() => {
+    if (!asignacion) return '';
+    return formatDateForInput(asignacion.dateInitial);
+  }, [asignacion]);
+
+  const isMembershipActive = useMemo(() => {
+    if (!asignacion) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dateFinal = new Date(asignacion.dateFinal);
+    dateFinal.setHours(0, 0, 0, 0);
+    // Active if dateFinal >= today AND not fully paid
+    return dateFinal >= today && asignacion.estado_pago !== 'paid';
+  }, [asignacion]);
+
   const initializeFormFromAsignacion = useCallback(() => {
     if (asignacion) {
+      // Use .id from the nested objects, not .toString() on the whole object
+      const miembroId = asignacion.miembro?.id ?? asignacion.miembro_details?.id;
+      const membresiaId = asignacion.membresia?.id ?? asignacion.membresia_details?.id;
+
+      // Get member details for editing (name, lastname, phone, address)
+      const memberDetails = asignacion.miembro_details;
+      const currentMiembro = miembros.find(m => m.id === miembroId);
+
       reset({
-        miembro: asignacion.miembro.toString(),
-        membresia: asignacion.membresia.toString(),
+        miembro: miembroId?.toString() ?? '',
+        membresia: membresiaId?.toString() ?? '',
         multiplier: asignacion.multiplier?.toString() ?? '1',
         dateInitial: formatDateForInput(asignacion.dateInitial),
+        // Member detail fields for editing
+        nuevoName: memberDetails?.name ?? currentMiembro?.name ?? '',
+        nuevoLastname: memberDetails?.lastname ?? currentMiembro?.lastname ?? '',
+        nuevoPhone: currentMiembro?.phone ?? '',
+        nuevoAddress: currentMiembro?.address ?? '',
       });
       setSelectedMembresia(asignacion.membresia_details as unknown as Membresia);
       setMultiplier(Number(asignacion.multiplier) || 1);
       setDiscountPercent(Number(asignacion.discount_percent) || 0);
+      setDateInitial(formatDateForInput(asignacion.dateInitial));
     }
-  }, [asignacion, reset, setSelectedMembresia, setMultiplier, setDiscountPercent]);
+  }, [asignacion, miembros, reset, setSelectedMembresia, setMultiplier, setDiscountPercent, setDateInitial]);
 
   useEffect(() => {
     if (asignacion) {
@@ -164,6 +207,7 @@ export function useMemberForm(): UseMemberFormReturn {
 
   const onSubmit = useCallback(
     async (data: FormData) => {
+      console.log('[useMemberForm] onSubmit CALLED, data:', data);
       // Type assertion needed because RHF passes Zod-inferred type which differs from FormData
       const formData = data as FormData;
       try {
@@ -216,8 +260,12 @@ export function useMemberForm(): UseMemberFormReturn {
           navigate('/dashboard/miembros');
         } else {
           // === ASIGNAR A MIEMBRO EXISTENTE ===
-          const miembroId = parseInt(formData.miembro, 10);
-          if (isNaN(miembroId)) {
+          // En modo edición, el miembro viene de la asignación (params.id), no del form
+          const miembroId = params.id
+            ? (asignacion?.miembro?.id ?? asignacion?.miembro_details?.id)
+            : parseInt(formData.miembro, 10);
+
+          if (!miembroId || isNaN(Number(miembroId))) {
             toast.error('Por favor, selecciona un miembro');
             return;
           }
@@ -259,6 +307,7 @@ export function useMemberForm(): UseMemberFormReturn {
     [
       modo,
       params.id,
+      asignacion,
       membresias,
       multiplier,
       discountPercent,
@@ -287,6 +336,7 @@ export function useMemberForm(): UseMemberFormReturn {
     miembros,
     membresias,
     selectedMembresia,
+    asignacion,
     
     // Pricing
     multiplier,
@@ -296,6 +346,11 @@ export function useMemberForm(): UseMemberFormReturn {
     estimatedPrice,
     totalDays,
     estimatedDateFinal,
+    
+    // Editing values (for display in disabled fields)
+    editingMembresiaId,
+    editingDateInitial,
+    isMembershipActive,
     
     // Handlers
     handleMemberShipsChange,

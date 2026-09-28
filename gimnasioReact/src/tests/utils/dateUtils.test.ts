@@ -75,7 +75,11 @@ describe('dateUtils', () => {
     it('should return empty string for invalid input', () => {
       expect(formatDateForInput('')).toBe('');
       expect(formatDateForInput('invalid')).toBe('');
-      expect(formatDateForInput('2026-01-15')).toBe(''); // Wrong format
+    });
+
+    it('should accept ISO format (YYYY-MM-DD) and return as-is', () => {
+      expect(formatDateForInput('2026-01-15')).toBe('2026-01-15');
+      expect(formatDateForInput('2026-12-31')).toBe('2026-12-31');
     });
   });
 

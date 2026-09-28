@@ -9,6 +9,7 @@ export function PaymentSummary({
   estimatedPrice,
   totalDays,
   estimatedDateFinal,
+  dateInitial,
   disabled = false,
 }: PaymentSummaryProps) {
   if (!selectedMembresia || Number(selectedMembresia.price) <= 0) {
@@ -32,7 +33,7 @@ export function PaymentSummary({
         </div>
         <div className="flex justify-between">
           <span>Fecha inicio:</span>
-          <span>{formatDateForDisplay(estimatedDateFinal) || '-'}</span>
+          <span>{dateInitial ? formatDateForDisplay(dateInitial) : '-'}</span>
         </div>
         <div className="flex justify-between">
           <span>Fecha fin:</span>

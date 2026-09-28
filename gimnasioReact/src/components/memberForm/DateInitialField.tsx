@@ -2,11 +2,14 @@ import type { DateInitialFieldProps } from '../../types/MemberFormTypes';
 import Input from '../ui/Input';
 import Label from '../ui/Label';
 
-export function DateInitialField({ register, errors, disabled = false }: DateInitialFieldProps) {
+export function DateInitialField({ register, errors, disabled = false, readOnly = false }: DateInitialFieldProps) {
   const errorMessage = errors.dateInitial?.message;
   const errorId = errorMessage ? 'dateInitial-error' : undefined;
   const registerResult = register('dateInitial');
 
+  // RHF controls the value via register; never pass external value prop
+  // readOnly: value submits and validates, but user can't edit
+  // disabled: value doesn't submit, user can't edit
   return (
     <div className="relative pt-5">
       <Input
@@ -14,8 +17,10 @@ export function DateInitialField({ register, errors, disabled = false }: DateIni
         type="date"
         required
         disabled={disabled}
+        readOnly={readOnly}
         aria-invalid={!!errorMessage}
         aria-describedby={errorId}
+        aria-readonly={readOnly}
         {...registerResult}
       />
       <Label htmlFor="dateInitial">Fecha Inicial</Label>

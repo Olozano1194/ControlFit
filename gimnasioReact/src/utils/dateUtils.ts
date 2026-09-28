@@ -19,42 +19,47 @@ export function calculateEstimatedDateFinal(
   if (!dateInitial || !isValid(parse(dateInitial, 'yyyy-MM-dd', new Date()))) {
     return '';
   }
-  
+
   if (typeof totalDays !== 'number' || isNaN(totalDays) || totalDays < 0) {
     return '';
   }
 
   const initialDate = parse(dateInitial, 'yyyy-MM-dd', new Date());
   const finalDate = addDays(initialDate, totalDays);
-  
+
   // Format as DD/MM/YYYY for display
   const day = String(finalDate.getDate()).padStart(2, '0');
   const month = String(finalDate.getMonth() + 1).padStart(2, '0');
   const year = finalDate.getFullYear();
-  
+
   return `${day}/${month}/${year}`;
 }
 
 /**
- * Converts API/display date format (DD-MM-YYYY or DD/MM/YYYY) to HTML input date format (YYYY-MM-DD)
+ * Converts API date (DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD) to HTML input date format (YYYY-MM-DD)
+ * Handles multiple formats from backend
  *
- * @param apiDate - Date string in DD-MM-YYYY or DD/MM/YYYY format
+ * @param apiDate - Date string in various formats
  * @returns Date string in YYYY-MM-DD format, or empty string if invalid
  */
-export function formatDateForInput(apiDate: string): string {
+export function parseApiDateToInput(apiDate: string): string {
   if (!apiDate) return '';
-  
+
   try {
-    // Support both dash and slash separators
+    // If already in YYYY-MM-DD format (ISO), return as-is
+    if (/^\d{4}-\d{2}-\d{2}$/.test(apiDate)) {
+      const date = parse(apiDate, 'yyyy-MM-dd', new Date());
+      return isValid(date) ? apiDate : '';
+    }
+
+    // Otherwise assume DD/MM/YYYY or DD-MM-YYYY
     const separator = apiDate.includes('/') ? '/' : '-';
     const [day, month, year] = apiDate.split(separator);
     if (!day || !month || !year) return '';
-    
-    // Validate it's a valid date
-    const date = parse(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`, 'yyyy-MM-dd', new Date());
-    if (!isValid(date)) return '';
-    
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+
+    const normalized = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    const date = parse(normalized, 'yyyy-MM-dd', new Date());
+    return isValid(date) ? normalized : '';
   } catch {
     return '';
   }
@@ -68,17 +73,23 @@ export function formatDateForInput(apiDate: string): string {
  */
 export function formatDateForDisplay(inputDate: string): string {
   if (!inputDate) return '';
-  
+
   try {
     const [year, month, day] = inputDate.split('-');
     if (!year || !month || !day) return '';
-    
+
     // Validate it's a valid date
     const date = parse(inputDate, 'yyyy-MM-dd', new Date());
     if (!isValid(date)) return '';
-    
+
     return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
   } catch {
     return '';
   }
 }
+
+/**
+ * Legacy alias for backward compatibility
+ * @deprecated Use parseApiDateToInput instead
+ */
+export const formatDateForInput = parseApiDateToInput;
