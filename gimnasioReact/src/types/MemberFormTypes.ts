@@ -202,6 +202,8 @@ export interface MembershipSelectProps {
   membresias: SelectedMembresia[];
   onChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
   disabled?: boolean;
+  readOnly?: boolean;
+  value?: string;
 }
 
 // DateInitialField - date input for initial date
@@ -209,6 +211,7 @@ export interface DateInitialFieldProps {
   register: FormRegister;
   errors: FormErrors;
   disabled?: boolean;
+  readOnly?: boolean;
 }
 
 // MultiplierDiscountFields - multiplier select and discount input
@@ -229,5 +232,6 @@ export interface PaymentSummaryProps {
   estimatedPrice: number;
   totalDays: number;
   estimatedDateFinal: string;
+  dateInitial?: string;
   disabled?: boolean;
 }

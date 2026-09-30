@@ -1,34 +1,40 @@
-import { forwardRef } from 'react';
 import type { MembershipSelectProps } from '../../types/MemberFormTypes';
 import { formatCurrencyCOP } from '../../utils/formatters';
 import Select from '../ui/Select';
 import Label from '../ui/Label';
 
-const MembershipSelect = forwardRef<HTMLSelectElement, MembershipSelectProps>(
-  ({ register, errors, membresias, onChange, disabled = false, ...props }, ref) => {
+const MembershipSelect = (
+  { register, errors, membresias, onChange, disabled = false, readOnly = false, value }: MembershipSelectProps
+) => {
     const errorMessage = errors.membresia?.message;
     const errorId = errorMessage ? 'membresia-error' : undefined;
     const registerResult = register('membresia');
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { ref: _registerRef, ...registerProps } = registerResult;
 
     const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-      registerProps.onChange(event);
+      registerResult.onChange(event);
       onChange(event);
     };
 
+    const currentValue = value ?? '';
+
     return (
       <div className="relative pt-5">
+        {/* Hidden input ensures value submits even when select is disabled (readOnly mode) */}
+        {readOnly && currentValue && (
+          <input type="hidden" name="membresia" value={currentValue} />
+        )}
         <Select
-          ref={ref}
+          ref={registerResult.ref}
           id="membresia"
-          {...registerProps}
-          onChange={handleChange}
-          disabled={disabled}
+          name={registerResult.name}
+          onBlur={registerResult.onBlur}
+          onChange={readOnly ? undefined : handleChange}
+          disabled={disabled || readOnly}
+          value={currentValue}
           aria-invalid={!!errorMessage}
           aria-describedby={errorId}
           aria-label="Seleccionar membresía"
-          {...props}
+          aria-readonly={readOnly}
         >
           <option value="">Seleccionar membresía...</option>
           {membresias
@@ -47,8 +53,7 @@ const MembershipSelect = forwardRef<HTMLSelectElement, MembershipSelectProps>(
         )}
       </div>
     );
-  }
-);
+};
 
 MembershipSelect.displayName = 'MembershipSelect';
 

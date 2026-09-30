@@ -26,6 +26,7 @@ interface MiembroConEstado extends Miembro {
     saldoPendiente?: number | string;
     estadoPago?: string;
     multiplier?: number | string;
+    asignacionId?: number;
 }
 
 interface MiembroTotal {
@@ -101,6 +102,7 @@ const ListMiembro = () => {
                 saldoPendiente: asignacion.saldo_pendiente,
                 estadoPago: asignacion.estado_pago,
                 multiplier: mult,
+                asignacionId: asignacion.id,
             } as MiembroConEstado;
         });
     }, [users, miembrosConEstado]);
@@ -224,16 +226,18 @@ const ListMiembro = () => {
             header: 'Estado',
             cell: (info) => <EstadoBadge estado={info.getValue()} />,
         }),
-        columnHelper.display({
+columnHelper.display({
             id: 'actions',
             header: 'Acciones',
             cell: props => {
-                const id = props.row.original.id;
-                if(typeof id !== 'number') return null;
+                const original = props.row.original as MiembroConEstado;
+                const memberId = original.id;
+                const asignacionId = original.asignacionId;
+                if(typeof memberId !== 'number') return null;
                 return(
                     <ActionButtons
-                        id={id}
-                        editPath={`/dashboard/miembro/${id}`}
+                        id={memberId}
+                        editPath={asignacionId ? `/dashboard/miembro/${asignacionId}` : `/dashboard/registrar-miembro`}
                         onDelete={async (id) => { await deleteMember(id);
                         setUser(users.filter(user => user.id !== id)); 
                         }}

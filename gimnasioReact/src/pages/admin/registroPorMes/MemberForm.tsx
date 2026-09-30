@@ -8,6 +8,7 @@ import { MembershipSelect } from '@/components/memberForm/MembershipSelect';
 import { DateInitialField } from '@/components/memberForm/DateInitialField';
 import { MultiplierDiscountFields } from '@/components/memberForm/MultiplierDiscountFields';
 import { PaymentSummary } from '@/components/memberForm/PaymentSummary';
+import { formatDateForDisplay, parseApiDateToInput } from '@/utils/dateUtils';
 
 export const MemberForm = () => {
   const {
@@ -16,6 +17,7 @@ export const MemberForm = () => {
     handleSubmit,
     errors,
     isSubmitting,
+    watch,
     // Mode
     modo,
     setModo,
@@ -23,6 +25,7 @@ export const MemberForm = () => {
     miembros,
     membresias,
     selectedMembresia,
+    asignacion,
     // Pricing
     multiplier,
     discountPercent,
@@ -31,6 +34,8 @@ export const MemberForm = () => {
     estimatedPrice,
     totalDays,
     estimatedDateFinal,
+    // Editing values (from asignacion directly)
+    isMembershipActive,
     // Handlers
     handleMemberShipsChange,
     handleMultiplierChange,
@@ -40,6 +45,30 @@ export const MemberForm = () => {
     isEditing,
   } = useMemberForm();
 
+  const showMemberSelection = !isEditing;
+  const dateInitial = watch('dateInitial');
+  const membresiaValue = watch('membresia');
+
+  // When editing: if membership is active -> allow editing membership, date, multiplier, discount
+  // If expired -> only allow editing member data (name, phone, etc.)
+  // Use readOnly (not disabled) so values still submit and pass Zod validation
+  const canEditMembership = isEditing ? isMembershipActive : true;
+  const membershipReadOnly = isSubmitting || !canEditMembership;
+  const dateInitialReadOnly = isSubmitting || !canEditMembership;
+  const pricingDisabled = isSubmitting || !canEditMembership;
+
+  // For PaymentSummary when editing, use asignacion data directly (most reliable)
+  // parseApiDateToInput handles both DD/MM/YYYY and YYYY-MM-DD from API
+  const paymentSummaryMembresia = isEditing && asignacion?.membresia_details
+    ? asignacion.membresia_details
+    : selectedMembresia;
+  const paymentSummaryDateInitial = isEditing && asignacion?.dateInitial
+    ? parseApiDateToInput(asignacion.dateInitial)
+    : dateInitial;
+  const paymentSummaryDateFinal = isEditing && asignacion?.dateFinal
+    ? formatDateForDisplay(parseApiDateToInput(asignacion.dateFinal))
+    : estimatedDateFinal;
+
   return (
     <main className="max-w-7xl mx-auto p-6 lg:p-10">
       <BreadCrumbsSection
@@ -48,17 +77,25 @@ export const MemberForm = () => {
         description="Asocie membresías a los atletas registrados en el sistema"
         entityName="esta asignación"
       />
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-        <ModeToggle modo={modo} onChange={setModo} disabled={isSubmitting} />
+      <form onSubmit={handleSubmit((data) => {
+        console.log('[MemberForm] SUBMIT FIRED, data:', data);
+        onSubmit(data);
+      })} className="space-y-8">
+        {showMemberSelection && <ModeToggle modo={modo} onChange={setModo} disabled={isSubmitting} />}
 
-        {modo === 'existente' ? (
-          <ExistingMemberSelect
-            register={register}
-            errors={errors}
-            miembros={miembros}
-            disabled={isSubmitting}
-          />
+        {showMemberSelection ? (
+          modo === 'existente' ? (
+            <ExistingMemberSelect
+              register={register}
+              errors={errors}
+              miembros={miembros}
+              disabled={isSubmitting}
+            />
+          ) : (
+            <NewMemberFields register={register} errors={errors} disabled={isSubmitting} />
+          )
         ) : (
+          // Editing: show same fields as "Nuevo miembro" - all editable, pre-filled via form reset()
           <NewMemberFields register={register} errors={errors} disabled={isSubmitting} />
         )}
 
@@ -69,8 +106,15 @@ export const MemberForm = () => {
             membresias={membresias}
             onChange={handleMemberShipsChange}
             disabled={isSubmitting}
+            readOnly={membershipReadOnly}
+            value={membresiaValue}
           />
-          <DateInitialField register={register} errors={errors} disabled={isSubmitting} />
+          <DateInitialField
+            register={register}
+            errors={errors}
+            disabled={isSubmitting}
+            readOnly={dateInitialReadOnly}
+          />
         </section>
 
         {showMultiplier && (
@@ -80,17 +124,18 @@ export const MemberForm = () => {
             multiplierOptions={multiplierOptions}
             onMultiplierChange={handleMultiplierChange}
             onDiscountChange={setDiscountPercent}
-            disabled={isSubmitting}
+            disabled={pricingDisabled}
           />
         )}
 
         <PaymentSummary
-          selectedMembresia={selectedMembresia}
+          selectedMembresia={paymentSummaryMembresia}
           multiplier={multiplier}
           discountPercent={discountPercent}
           estimatedPrice={estimatedPrice}
           totalDays={totalDays}
-          estimatedDateFinal={estimatedDateFinal}
+          estimatedDateFinal={paymentSummaryDateFinal}
+          dateInitial={paymentSummaryDateInitial}
           disabled={isSubmitting}
         />
 
@@ -103,5 +148,4 @@ export const MemberForm = () => {
     </main>
   );
 };
-
 export default MemberForm;
