@@ -9,6 +9,7 @@ import { DateInitialField } from '@/components/memberForm/DateInitialField';
 import { MultiplierDiscountFields } from '@/components/memberForm/MultiplierDiscountFields';
 import { PaymentSummary } from '@/components/memberForm/PaymentSummary';
 import { SuspenderMembresiaModal } from '@/components/memberForm/operations/SuspenderMembresiaModal';
+import { CambiarPlanModal } from '@/components/memberForm/operations/CambiarPlanModal';
 import { formatDateForDisplay, parseApiDateToInput } from '@/utils/dateUtils';
 import type { SelectedMembresia } from '@/types/MemberFormTypes';
 import { useState } from 'react';
@@ -49,12 +50,18 @@ export const MemberForm = () => {
   } = useMemberForm();
 
   const [showSuspendModal, setShowSuspendModal] = useState(false);
+  const [showCambiarPlanModal, setShowCambiarPlanModal] = useState(false);
 
   const showMemberSelection = !isEditing;
   const dateInitial = watch('dateInitial');
   const membresiaValue = watch('membresia');
 
   const handleSuspendSuccess = () => {
+    // Refresh the page to get updated assignment data
+    window.location.reload();
+  };
+
+  const handleCambiarPlanSuccess = () => {
     // Refresh the page to get updated assignment data
     window.location.reload();
   };
@@ -170,7 +177,12 @@ export const MemberForm = () => {
               >
                 Suspender
               </Button>
-              <Button type="button" variant="secondary" disabled>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setShowCambiarPlanModal(true)}
+                disabled={isSubmitting}
+              >
                 Cambiar plan
               </Button>
               <Button type="button" variant="secondary" disabled>
@@ -196,6 +208,15 @@ export const MemberForm = () => {
         onClose={() => setShowSuspendModal(false)}
         onSuccess={handleSuspendSuccess}
         asignacion={asignacion}
+      />
+
+      {/* Cambiar Plan Modal */}
+      <CambiarPlanModal
+        isOpen={showCambiarPlanModal}
+        onClose={() => setShowCambiarPlanModal(false)}
+        onSuccess={handleCambiarPlanSuccess}
+        asignacion={asignacion}
+        membresias={membresias}
       />
     </main>
   );
