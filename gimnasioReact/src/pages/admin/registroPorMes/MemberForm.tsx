@@ -10,6 +10,8 @@ import { MultiplierDiscountFields } from '@/components/memberForm/MultiplierDisc
 import { PaymentSummary } from '@/components/memberForm/PaymentSummary';
 import { SuspenderMembresiaModal } from '@/components/memberForm/operations/SuspenderMembresiaModal';
 import { CambiarPlanModal } from '@/components/memberForm/operations/CambiarPlanModal';
+import { RefundModal } from '@/components/memberForm/operations/RefundModal';
+import { RenovarModal } from '@/components/memberForm/operations/RenovarModal';
 import { formatDateForDisplay, parseApiDateToInput } from '@/utils/dateUtils';
 import type { SelectedMembresia } from '@/types/MemberFormTypes';
 import { useState } from 'react';
@@ -51,6 +53,8 @@ export const MemberForm = () => {
 
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const [showCambiarPlanModal, setShowCambiarPlanModal] = useState(false);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [showRenovarModal, setShowRenovarModal] = useState(false);
 
   const showMemberSelection = !isEditing;
   const dateInitial = watch('dateInitial');
@@ -62,6 +66,16 @@ export const MemberForm = () => {
   };
 
   const handleCambiarPlanSuccess = () => {
+    // Refresh the page to get updated assignment data
+    window.location.reload();
+  };
+
+  const handleRefundSuccess = () => {
+    // Refresh the page to get updated assignment data
+    window.location.reload();
+  };
+
+  const handleRenovarSuccess = () => {
     // Refresh the page to get updated assignment data
     window.location.reload();
   };
@@ -185,10 +199,20 @@ export const MemberForm = () => {
               >
                 Cambiar plan
               </Button>
-              <Button type="button" variant="secondary" disabled>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setShowRefundModal(true)}
+                disabled={isSubmitting}
+              >
                 Registrar devolución
               </Button>
-              <Button type="button" variant="secondary" disabled>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setShowRenovarModal(true)}
+                disabled={isSubmitting}
+              >
                 Renovar
               </Button>
             </div>
@@ -215,6 +239,23 @@ export const MemberForm = () => {
         isOpen={showCambiarPlanModal}
         onClose={() => setShowCambiarPlanModal(false)}
         onSuccess={handleCambiarPlanSuccess}
+        asignacion={asignacion}
+        membresias={membresias}
+      />
+
+      {/* Refund Modal */}
+      <RefundModal
+        isOpen={showRefundModal}
+        onClose={() => setShowRefundModal(false)}
+        onSuccess={handleRefundSuccess}
+        asignacion={asignacion}
+      />
+
+      {/* Renovar Modal */}
+      <RenovarModal
+        isOpen={showRenovarModal}
+        onClose={() => setShowRenovarModal(false)}
+        onSuccess={handleRenovarSuccess}
         asignacion={asignacion}
         membresias={membresias}
       />
