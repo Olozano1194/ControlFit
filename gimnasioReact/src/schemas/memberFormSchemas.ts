@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // ============================================
-// Common fields shared by both modes
+// Common fields shared by all modes
 // ============================================
 
 const commonFields = {
@@ -13,12 +13,12 @@ const commonFields = {
 };
 
 // ============================================
-// Existing member mode schema
+// Existing member mode schema (select existing member)
 // ============================================
 
 export const existingMemberSchema = z.object({
   ...commonFields,
-  miembro: z.string().min(1, 'Nombre requerido'),
+  miembro: z.string().min(1, 'Miembro requerido'),
   // Fields NOT required for existing member
   nuevoName: z.string().optional(),
   nuevoLastname: z.string().optional(),
@@ -26,7 +26,7 @@ export const existingMemberSchema = z.object({
 });
 
 // ============================================
-// New member mode schema
+// New member mode schema (create new member)
 // ============================================
 
 const lettersOnlyRegex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
@@ -52,11 +52,34 @@ export const newMemberSchema = z.object({
 });
 
 // ============================================
+// Editing member mode schema (member ID comes from URL/asignacion)
+// ============================================
+//
+// In edit mode:
+// - Member fields (nuevoName, nuevoLastname, nuevoPhone, nuevoAddress) are optional
+//   because they're pre-filled from the assignment and user may only change some
+// - Assignment fields (membresia, dateInitial, multiplier) are required by schema
+//   but the submit logic gates the actual API call via canEditAssignment
+// - This allows member-only updates to pass validation even if assignment
+//   fields haven't changed (or membership is inactive)
+
+export const editingMemberSchema = z.object({
+  ...commonFields,
+  // miembro is NOT required - it comes from the asignacion (URL params)
+  miembro: z.string().optional(),
+  // Member detail fields - optional when editing (pre-filled from asignacion)
+  nuevoName: z.string().optional(),
+  nuevoLastname: z.string().optional(),
+  nuevoPhone: z.string().optional(),
+});
+
+// ============================================
 // Schema factory
 // ============================================
 
-export type ModoFormulario = 'existente' | 'nuevo';
+export type ModoFormulario = 'existente' | 'nuevo' | 'edicion';
 
-export function memberFormSchema(modo: ModoFormulario) {
+export function memberFormSchema(modo: ModoFormulario, isEditing = false) {
+  if (isEditing) return editingMemberSchema;
   return modo === 'existente' ? existingMemberSchema : newMemberSchema;
 }
