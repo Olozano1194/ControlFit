@@ -8,7 +8,10 @@ import { MembershipSelect } from '@/components/memberForm/MembershipSelect';
 import { DateInitialField } from '@/components/memberForm/DateInitialField';
 import { MultiplierDiscountFields } from '@/components/memberForm/MultiplierDiscountFields';
 import { PaymentSummary } from '@/components/memberForm/PaymentSummary';
+import { SuspenderMembresiaModal } from '@/components/memberForm/operations/SuspenderMembresiaModal';
 import { formatDateForDisplay, parseApiDateToInput } from '@/utils/dateUtils';
+import type { SelectedMembresia } from '@/types/MemberFormTypes';
+import { useState } from 'react';
 
 export const MemberForm = () => {
   const {
@@ -34,8 +37,8 @@ export const MemberForm = () => {
     estimatedPrice,
     totalDays,
     estimatedDateFinal,
-    // Editing values (from asignacion directly)
-    isMembershipActive,
+    // Editability
+    canEditAssignment,
     // Handlers
     handleMemberShipsChange,
     handleMultiplierChange,
@@ -45,22 +48,35 @@ export const MemberForm = () => {
     isEditing,
   } = useMemberForm();
 
+  const [showSuspendModal, setShowSuspendModal] = useState(false);
+
   const showMemberSelection = !isEditing;
   const dateInitial = watch('dateInitial');
   const membresiaValue = watch('membresia');
 
-  // When editing: if membership is active -> allow editing membership, date, multiplier, discount
-  // If expired -> only allow editing member data (name, phone, etc.)
-  // Use readOnly (not disabled) so values still submit and pass Zod validation
-  const canEditMembership = isEditing ? isMembershipActive : true;
-  const membershipReadOnly = isSubmitting || !canEditMembership;
-  const dateInitialReadOnly = isSubmitting || !canEditMembership;
-  const pricingDisabled = isSubmitting || !canEditMembership;
+  const handleSuspendSuccess = () => {
+    // Refresh the page to get updated assignment data
+    window.location.reload();
+  };
+
+  // When editing: assignment fields editable only when estado_pago === 'pending'
+  // Personal fields always editable when editing
+  const membershipReadOnly = isSubmitting || !canEditAssignment;
+  const dateInitialReadOnly = isSubmitting || !canEditAssignment;
+  const pricingDisabled = isSubmitting || !canEditAssignment;
 
   // For PaymentSummary when editing, use asignacion data directly (most reliable)
   // parseApiDateToInput handles both DD/MM/YYYY and YYYY-MM-DD from API
-  const paymentSummaryMembresia = isEditing && asignacion?.membresia_details
-    ? asignacion.membresia_details
+  // membresia_details only has {id, name, price} - adapt to SelectedMembresia shape
+  const paymentSummaryMembresia: SelectedMembresia | null = isEditing && asignacion?.membresia_details
+    ? {
+        id: asignacion.membresia_details.id,
+        name: asignacion.membresia_details.name,
+        price: asignacion.membresia_details.price,
+        duration: selectedMembresia?.duration ?? 0,
+        max_multiplier: selectedMembresia?.max_multiplier ?? 1,
+        gimnasio: selectedMembresia?.gimnasio ?? 0,
+      }
     : selectedMembresia;
   const paymentSummaryDateInitial = isEditing && asignacion?.dateInitial
     ? parseApiDateToInput(asignacion.dateInitial)
@@ -78,7 +94,6 @@ export const MemberForm = () => {
         entityName="esta asignación"
       />
       <form onSubmit={handleSubmit((data) => {
-        console.log('[MemberForm] SUBMIT FIRED, data:', data);
         onSubmit(data);
       })} className="space-y-8">
         {showMemberSelection && <ModeToggle modo={modo} onChange={setModo} disabled={isSubmitting} />}
@@ -139,12 +154,49 @@ export const MemberForm = () => {
           disabled={isSubmitting}
         />
 
+        {/* Operation action buttons */}
+        {!canEditAssignment && isEditing && (
+          <section className="space-y-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <h3 className="text-sm font-medium text-amber-800">
+              Esta membresía está en estado <strong>{asignacion?.estado_pago === 'paid' ? 'Pagada' : 'No pendiente'}</strong>.
+              Los campos de plan y precios son de solo lectura. Use las operaciones de negocio:
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setShowSuspendModal(true)}
+                disabled={isSubmitting}
+              >
+                Suspender
+              </Button>
+              <Button type="button" variant="secondary" disabled>
+                Cambiar plan
+              </Button>
+              <Button type="button" variant="secondary" disabled>
+                Registrar devolución
+              </Button>
+              <Button type="button" variant="secondary" disabled>
+                Renovar
+              </Button>
+            </div>
+          </section>
+        )}
+
         <div className="w-full flex items-center justify-center">
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Guardando...' : isEditing ? 'Actualizar' : 'Registrar'}
           </Button>
         </div>
       </form>
+
+      {/* Suspender Modal */}
+      <SuspenderMembresiaModal
+        isOpen={showSuspendModal}
+        onClose={() => setShowSuspendModal(false)}
+        onSuccess={handleSuspendSuccess}
+        asignacion={asignacion}
+      />
     </main>
   );
 };

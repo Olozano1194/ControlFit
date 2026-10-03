@@ -1,6 +1,5 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useForm, type Resolver, type FieldErrors } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useMembershipPricing } from './useMembershipPricing';
@@ -8,8 +7,9 @@ import { useMemberFormData } from './useMemberFormData';
 import { memberFormSchema, type ModoFormulario } from '../schemas/memberFormSchemas';
 import type { FormData, Miembro } from '../types/MemberFormTypes';
 import type { Membresia } from '../model/memberShips.model';
-import { createMember } from '../api/action/userGym.api';
-import { createAsignarMemberShips, updateAsignarMemberShips } from '../api/action/asignarMemberShips.api';
+import type { AsignarMemberShips } from '../model/asignarMemberShips.model';
+import { createMember, updateMember } from '../api/action/userGym.api';
+import { updateAsignarMemberShips } from '../api/action/asignarMemberShips.api';
 import type { CreateMemberDto } from '../model/dto/member.dto';
 import type { CreateAsignarMemberShipsDto } from '../model/dto/asignarMemberShips.dto';
 import { formatDateForInput } from '../utils/dateUtils';
@@ -23,17 +23,17 @@ export interface UseMemberFormReturn {
   errors: ReturnType<typeof useForm<FormData>>['formState']['errors'];
   isSubmitting: boolean;
   isDirty: boolean;
-  
+
   // Mode
   modo: ModoFormulario;
   setModo: (modo: ModoFormulario) => void;
-  
+
   // Data
   miembros: Miembro[];
   membresias: Membresia[];
   selectedMembresia: Membresia | null;
-  asignacion: any; // AsignarMemberShips | null
-  
+  asignacion: AsignarMemberShips | null;
+
   // Pricing (delegated to useMembershipPricing)
   multiplier: number;
   discountPercent: number;
@@ -42,17 +42,24 @@ export interface UseMemberFormReturn {
   estimatedPrice: number;
   totalDays: number;
   estimatedDateFinal: string;
-  
+
   // Editing values (for display in disabled fields)
   editingMembresiaId: string;
   editingDateInitial: string;
   isMembershipActive: boolean;
-  
+
+  // Dirty tracking
+  memberDirty: boolean;
+  assignmentDirty: boolean;
+
+  // Editability
+  canEditAssignment: boolean;
+
   // Handlers
   handleMemberShipsChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
   handleMultiplierChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
   setDiscountPercent: (val: number) => void;
-  
+
   // Submission
   onSubmit: (data: FormData) => Promise<void>;
   isEditing: boolean;
@@ -72,9 +79,15 @@ export function useMemberForm(): UseMemberFormReturn {
   } = useMemberFormData({ id: params.id });
 
   const form = useForm<FormData>({
-    // Type assertion needed because Zod schema factory returns union type incompatible with FormData
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(memberFormSchema(modo)) as any,
+    // Custom resolver that reacts to modo/isEditing changes
+    resolver: (async (values) => {
+      const schema = memberFormSchema(modo, isEditing);
+      const result = await schema.safeParseAsync(values);
+      if (result.success) {
+        return { values: result.data, errors: {} };
+      }
+      return { values: {}, errors: result.error.flatten().fieldErrors as FieldErrors<FormData> };
+    }) as Resolver<FormData>,
     shouldUnregister: true,
     defaultValues: {
       miembro: '',
@@ -171,6 +184,83 @@ export function useMemberForm(): UseMemberFormReturn {
     return dateFinal >= today && asignacion.estado_pago !== 'paid';
   }, [asignacion]);
 
+  // ============ DIRTY TRACKING ============
+  // Track initial values from asignacion for dirty comparison
+  const initialValuesRef = useRef<{
+    member: { name: string; lastname: string; phone: string; address: string };
+    assignment: { membresia: string; dateInitial: string; multiplier: number; discount_percent: number };
+  } | null>(null);
+
+  const computeInitialValues = useCallback(() => {
+    if (!asignacion) return;
+
+    const memberDetails = asignacion.miembro_details;
+    const currentMiembro = miembros.find(m => m.id === (asignacion.miembro?.id ?? asignacion.miembro_details?.id));
+
+    initialValuesRef.current = {
+      member: {
+        name: memberDetails?.name ?? currentMiembro?.name ?? '',
+        lastname: memberDetails?.lastname ?? currentMiembro?.lastname ?? '',
+        phone: currentMiembro?.phone ?? '',
+        address: currentMiembro?.address ?? '',
+      },
+      assignment: {
+        membresia: (asignacion.membresia?.id ?? asignacion.membresia_details?.id)?.toString() ?? '',
+        dateInitial: formatDateForInput(asignacion.dateInitial),
+        multiplier: Number(asignacion.multiplier) || 1,
+        discount_percent: Number(asignacion.discount_percent) || 0,
+      },
+    };
+  }, [asignacion, miembros]);
+
+  // Update initial values when asignacion loads
+  useEffect(() => {
+    computeInitialValues();
+  }, [computeInitialValues]);
+
+  // Dirty tracking - compare current form values with initial values
+  const memberDirty = useMemo(() => {
+    if (!initialValuesRef.current || !isEditing) return false;
+
+    const currentName = watch('nuevoName') ?? '';
+    const currentLastname = watch('nuevoLastname') ?? '';
+    const currentPhone = watch('nuevoPhone') ?? '';
+    const currentAddress = watch('nuevoAddress') ?? '';
+
+    const { name, lastname, phone, address } = initialValuesRef.current.member;
+
+    return (
+      currentName !== name ||
+      currentLastname !== lastname ||
+      currentPhone !== phone ||
+      currentAddress !== address
+    );
+  }, [watch, isEditing]);
+
+  const assignmentDirty = useMemo(() => {
+    if (!initialValuesRef.current || !isEditing) return false;
+
+    const currentMembresia = watch('membresia') ?? '';
+    const currentDateInitial = watch('dateInitial') ?? '';
+    const currentMultiplier = parseInt(watch('multiplier') ?? '1', 10);
+    const currentDiscount = discountPercent;
+
+    const { membresia, dateInitial, multiplier, discount_percent } = initialValuesRef.current.assignment;
+
+    return (
+      currentMembresia !== membresia ||
+      currentDateInitial !== dateInitial ||
+      currentMultiplier !== multiplier ||
+      currentDiscount !== discount_percent
+    );
+  }, [watch, discountPercent, isEditing]);
+
+  // Can edit assignment only when estado_pago === 'pending'
+  const canEditAssignment = useMemo(() => {
+    if (!asignacion) return true; // New assignments are always editable
+    return asignacion.estado_pago === 'pending';
+  }, [asignacion]);
+
   const initializeFormFromAsignacion = useCallback(() => {
     if (asignacion) {
       // Use .id from the nested objects, not .toString() on the whole object
@@ -207,8 +297,6 @@ export function useMemberForm(): UseMemberFormReturn {
 
   const onSubmit = useCallback(
     async (data: FormData) => {
-      console.log('[useMemberForm] onSubmit CALLED, data:', data);
-      // Type assertion needed because RHF passes Zod-inferred type which differs from FormData
       const formData = data as FormData;
       try {
         const membresiaId = parseInt(formData.membresia, 10);
@@ -259,8 +347,7 @@ export function useMemberForm(): UseMemberFormReturn {
           setDiscountPercent(0);
           navigate('/dashboard/miembros');
         } else {
-          // === ASIGNAR A MIEMBRO EXISTENTE ===
-          // En modo edición, el miembro viene de la asignación (params.id), no del form
+          // === EDITAR ASIGNACIÓN EXISTENTE ===
           const miembroId = params.id
             ? (asignacion?.miembro?.id ?? asignacion?.miembro_details?.id)
             : parseInt(formData.miembro, 10);
@@ -270,33 +357,45 @@ export function useMemberForm(): UseMemberFormReturn {
             return;
           }
 
-          const requestData: CreateAsignarMemberShipsDto = {
-            miembro: miembroId,
-            membresia: membresiaId,
-            multiplier: multiplier,
-            dateInitial: dateInitialStr,
-            dateFinal: dateFinal,
-            discount_percent: discountPercent,
-          };
+          // Track what changed
+          const hasMemberChanges = memberDirty;
+          const hasAssignmentChanges = assignmentDirty && canEditAssignment;
 
-          if (params.id) {
-            await updateAsignarMemberShips(parseInt(params.id, 10), requestData);
-            toast.success('Asignación de Membresía Actualizada', {
-              duration: 3000,
-              position: 'bottom-right',
-              style: { background: '#4b5563', color: '#fff', padding: '16px', borderRadius: '8px' },
-            });
-          } else {
-            await createAsignarMemberShips(requestData);
-            toast.success('Asignación de Membresía Creada', {
-              duration: 3000,
-              position: 'bottom-right',
-              style: { background: '#4b5563', color: '#fff', padding: '16px', borderRadius: '8px' },
-            });
-            reset();
-            setMultiplier(1);
-            setDiscountPercent(0);
+          // 1. If member data changed → update member personal info (always allowed when editing)
+          if (hasMemberChanges) {
+            const memberData: CreateMemberDto = {
+              name: formData.nuevoName || initialValuesRef.current?.member.name || '',
+              lastname: formData.nuevoLastname || initialValuesRef.current?.member.lastname || '',
+              phone: formData.nuevoPhone || initialValuesRef.current?.member.phone || '',
+              address: formData.nuevoAddress || initialValuesRef.current?.member.address || '',
+            };
+
+            await updateMember(miembroId, memberData);
           }
+
+          // 2. If assignment changed AND can edit assignment (estado_pago === 'pending')
+          //    → update assignment with recalculated dateFinal
+          if (hasAssignmentChanges) {
+            const requestData: CreateAsignarMemberShipsDto = {
+              miembro: miembroId,
+              membresia: membresiaId,
+              multiplier: multiplier,
+              dateInitial: dateInitialStr,
+              dateFinal: dateFinal, // Recalculated ONLY when assignment changes
+              discount_percent: discountPercent,
+            };
+
+            await updateAsignarMemberShips(parseInt(params.id!, 10), requestData);
+          }
+
+          // 3. If only member changed (assignment not dirty or not editable), skip assignment call
+          //    dateFinal is NOT recalculated on pure member edits
+
+          toast.success('Asignación de Membresía Actualizada', {
+            duration: 3000,
+            position: 'bottom-right',
+            style: { background: '#4b5563', color: '#fff', padding: '16px', borderRadius: '8px' },
+          });
           navigate('/dashboard/asignar-membresia-list');
         }
       } catch (err) {
@@ -311,6 +410,9 @@ export function useMemberForm(): UseMemberFormReturn {
       membresias,
       multiplier,
       discountPercent,
+      memberDirty,
+      assignmentDirty,
+      canEditAssignment,
       reset,
       setMultiplier,
       setDiscountPercent,
@@ -327,17 +429,17 @@ export function useMemberForm(): UseMemberFormReturn {
     errors,
     isSubmitting,
     isDirty,
-    
+
     // Mode
     modo,
     setModo,
-    
+
     // Data
     miembros,
     membresias,
     selectedMembresia,
     asignacion,
-    
+
     // Pricing
     multiplier,
     discountPercent,
@@ -346,17 +448,24 @@ export function useMemberForm(): UseMemberFormReturn {
     estimatedPrice,
     totalDays,
     estimatedDateFinal,
-    
+
     // Editing values (for display in disabled fields)
     editingMembresiaId,
     editingDateInitial,
     isMembershipActive,
-    
+
+    // Dirty tracking
+    memberDirty,
+    assignmentDirty,
+
+    // Editability
+    canEditAssignment,
+
     // Handlers
     handleMemberShipsChange,
     handleMultiplierChange,
     setDiscountPercent,
-    
+
     // Submission
     onSubmit,
     isEditing,

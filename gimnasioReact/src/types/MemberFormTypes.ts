@@ -22,7 +22,7 @@ export interface FormData {
 // Form Modes
 // ============================================
 
-export type ModoFormulario = 'existente' | 'nuevo';
+export type ModoFormulario = 'existente' | 'nuevo' | 'edicion';
 
 export type MemberFormMode = ModoFormulario;
 
