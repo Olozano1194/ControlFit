@@ -33,7 +33,7 @@ describe('axiosPrivate CSRF interceptor', () => {
         const interceptor = axiosPrivate.interceptors.request.handlers[0];
         const result = await interceptor.fulfilled(config);
         
-        expect(getCsrfCookie).toHaveBeenCalledWith('csrftoken');
+        expect(getCsrfCookie).toHaveBeenCalledWith();
         expect(result.headers['X-CSRF-Token']).toBe('abc123');
     });
 
