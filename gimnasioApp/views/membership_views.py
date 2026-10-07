@@ -8,28 +8,13 @@ from ..serializers.membership_serializer import MembresiasSerializer, MembresiaA
 from ..models.membership_model import Membresia, MembresiaAsignada
 from ..permissions import IsRecepcionUser, RequirePasswordChange
 from ..mixins import MultiTenantViewSetMixin
-from datetime import date, timedelta
-from decimal import Decimal
+from datetime import date
 
-from .membership_helpers import validate_reason
-from .membership_suspender import calculate_suspension_days, apply_suspension
-from .membership_cambiar_plan import (
-    validate_nueva_membresia,
-    validate_cambiar_plan_multiplier,
-    validate_cambiar_plan_discount,
-    apply_cambiar_plan,
-)
-from .membership_calculations import (
-    calculate_unused_days_credit,
-    calculate_new_plan_price,
-    calculate_new_dates,
-)
-from .membership_devolucion import validate_monto, create_refund_payment
-from .membership_renovar import (
-    get_membresia_for_renewal,
-    calculate_renewal_price,
-    calculate_renewal_dates,
-    create_renewal_assignment,
+from .membership_actions import (
+    suspender_action,
+    cambiar_plan_action,
+    devolucion_action,
+    renovar_action,
 )
 
 
@@ -75,28 +60,9 @@ class MembresiaAsignadaViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
         
         Updates dateFinal by extending it with the suspension days.
         Multi-tenant scoped via gimnasio_field.
-        Audit log: TODO - implement when OperationLog model exists.
         """
         asignacion = self.get_object()
-        
-        error = validate_reason(request.data.get('reason'), 'suspender')
-        if error:
-            return error
-        
-        suspension_days, error = calculate_suspension_days(
-            request.data.get('dias'),
-            request.data.get('fecha_inicio'),
-            request.data.get('fecha_fin')
-        )
-        if error:
-            return error
-        
-        apply_suspension(asignacion, suspension_days)
-        
-        # TODO: Audit log - create OperationLog entry when model exists
-        
-        serializer = self.get_serializer(asignacion)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return suspender_action(request, self, asignacion)
 
     @action(detail=True, methods=['post'], url_path='cambiar-plan')
     def cambiar_plan(self, request, pk=None):
@@ -119,54 +85,9 @@ class MembresiaAsignadaViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
         
         Preserva snapshots contables: price (original), total_pagado, saldo_pendiente, estado_pago
         Multi-tenant scoped via gimnasio_field.
-        Audit log: TODO - implement when OperationLog model exists.
         """
         asignacion = self.get_object()
-        today = self.get_today()
-        
-        error = validate_reason(request.data.get('reason'), 'cambiar el plan')
-        if error:
-            return error
-        
-        nueva_membresia, error = validate_nueva_membresia(request.data.get('nueva_membresia_id'), request)
-        if error:
-            return error
-        
-        multiplier, error = validate_cambiar_plan_multiplier(request.data.get('multiplier', '1'), nueva_membresia)
-        if error:
-            return error
-        
-        discount_percent, error = validate_cambiar_plan_discount(request.data.get('discount_percent', '0'))
-        if error:
-            return error
-        
-        original_price = asignacion.price
-        original_membresia = asignacion.membresia
-        original_multiplier = asignacion.multiplier
-        
-        unused_days, credit = calculate_unused_days_credit(
-            asignacion, today, original_membresia, original_price, original_multiplier
-        )
-        
-        final_price = calculate_new_plan_price(
-            nueva_membresia, multiplier, discount_percent, credit
-        )
-        
-        new_date_initial, new_date_final, new_total_days = calculate_new_dates(
-            today, nueva_membresia, multiplier
-        )
-        
-        apply_cambiar_plan(
-            asignacion, nueva_membresia, multiplier, discount_percent,
-            new_date_initial, new_date_final, final_price
-        )
-        
-        asignacion.refresh_from_db()
-        
-        # TODO: Audit log - create OperationLog entry when model exists
-        
-        serializer = self.get_serializer(asignacion)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return cambiar_plan_action(request, self, asignacion)
 
     @action(detail=True, methods=['post'], url_path='devolucion')
     def devolucion(self, request, pk=None):
@@ -182,26 +103,9 @@ class MembresiaAsignadaViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
         2. Reduce total_pagado
         3. Recalcula saldo_pendiente y estado_pago
         Multi-tenant scoped via gimnasio_field.
-        Audit log: TODO - implement when OperationLog model exists.
         """
         asignacion = self.get_object()
-        
-        error = validate_reason(request.data.get('reason'), 'registrar la devolución')
-        if error:
-            return error
-        
-        monto, error = validate_monto(request.data.get('monto'), asignacion.total_pagado)
-        if error:
-            return error
-        
-        create_refund_payment(asignacion, monto, request.data.get('reason'))
-        
-        asignacion.refresh_from_db()
-        
-        # TODO: Audit log - create OperationLog entry when model exists
-        
-        serializer = self.get_serializer(asignacion)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return devolucion_action(request, self, asignacion)
 
     @action(detail=True, methods=['post'], url_path='renovar')
     def renovar(self, request, pk=None):
@@ -221,37 +125,7 @@ class MembresiaAsignadaViewSet(MultiTenantViewSetMixin, viewsets.ModelViewSet):
         4. price = membresia.price * multiplier * (1 - discount/100)
         5. total_pagado = 0, estado_pago = 'pending' (nueva asignación sin pagos)
         Multi-tenant scoped via gimnasio_field.
-        Audit log: TODO - implement when OperationLog model exists.
-        
         Returns the new assignment.
         """
         asignacion = self.get_object()
-        today = self.get_today()
-        
-        error = validate_reason(request.data.get('reason'), 'renovar la membresía')
-        if error:
-            return error
-        
-        membresia, error = get_membresia_for_renewal(request, asignacion, request.data.get('membresia_id'))
-        if error:
-            return error
-        
-        multiplier, error = validate_cambiar_plan_multiplier(request.data.get('multiplier', '1'), membresia)
-        if error:
-            return error
-        
-        discount_percent, error = validate_cambiar_plan_discount(request.data.get('discount_percent', '0'))
-        if error:
-            return error
-        
-        price = calculate_renewal_price(membresia, multiplier, discount_percent)
-        date_initial, date_final, dias_totales = calculate_renewal_dates(today, membresia, multiplier)
-        
-        nueva_asignacion = create_renewal_assignment(
-            request, asignacion, membresia, multiplier, discount_percent, date_initial, price
-        )
-        
-        # TODO: Audit log - create OperationLog entry when model exists
-        
-        serializer = self.get_serializer(nueva_asignacion)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return renovar_action(request, self, asignacion)

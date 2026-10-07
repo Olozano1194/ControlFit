@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import axios from 'axios';
 
 // Mock all authStorage exports
 vi.mock('../../utils/authStorage', () => ({
@@ -10,7 +9,6 @@ vi.mock('../../utils/authStorage', () => ({
 }));
 
 import { getCsrfCookie } from '../../utils/authStorage';
-import { getAccessToken } from '../../utils/authStorage';
 import { axiosPrivate } from './axios.private';
 
 describe('axiosPrivate CSRF interceptor', () => {
