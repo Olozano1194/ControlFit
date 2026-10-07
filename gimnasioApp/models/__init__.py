@@ -12,6 +12,7 @@ from .calendar_model import TipoEvento, EventoCalendario
 from .notification_model import Notification
 from .demo_model import DemoRequest
 from .payment_model import PagoMembresia
+from .operation_log_model import OperationLog
 
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     'EventoCalendario',
     'Notification',
     'DemoRequest',
+    'OperationLog',
 ]
