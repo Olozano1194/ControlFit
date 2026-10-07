@@ -23,7 +23,7 @@ axiosPrivate.interceptors.request.use(
   (config) => {
     const method = config.method?.toLowerCase();
     if (method && MUTATING_METHODS.includes(method)) {
-      const csrfToken = getCsrfCookie('csrftoken');
+      const csrfToken = getCsrfCookie();
       config.headers['X-CSRF-Token'] = csrfToken ?? '';
     }
     return config;
