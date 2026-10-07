@@ -32,7 +32,7 @@ export const clearCsrfToken = (): void => {
  * Returns the CSRF token for use in X-CSRF-Token header.
  * Priority: sessionStorage (works cross-origin) → document.cookie (same-origin fallback).
  */
-export const getCsrfCookie = (_name: string): string | null => {
+export const getCsrfCookie = (): string | null => {
   // 1. Prefer sessionStorage — reliable in cross-origin deployments
   const fromStorage = getCsrfToken();
   if (fromStorage) return fromStorage;

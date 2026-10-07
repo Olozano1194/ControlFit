@@ -11,6 +11,7 @@ import * as demoRequestsApi from '../../../api/action/demoRequests.api';
 vi.mock('../../../api/action/demoRequests.api', () => ({
     getDemoRequests: vi.fn(),
     updateDemoRequestEstado: vi.fn(),
+    deleteDemoRequest: vi.fn(),
 }));
 
 // Test wrapper with QueryClient and Toaster
