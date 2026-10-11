@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Calendar, dateFnsLocalizer, Event, type SlotInfo } from 'react-big-calendar';
-import withDragAndDrop, {
+import { type SlotInfo } from 'react-big-calendar';
+import {
     type EventInteractionArgs,
 } from 'react-big-calendar/lib/addons/dragAndDrop';
-import { format, parse, startOfWeek, getDay } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale/es';
 import { toast } from 'react-hot-toast';
 import { IoClose } from 'react-icons/io5';
@@ -22,37 +22,11 @@ import TipoEventoAdmin from './TipoEventoAdmin';
 import { toApiISO, toLocalInputValue, normalizeSlotEnd } from './dateTime';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
+import { CalendarEvent } from './calendarTypes';
+import { toCalendarEvent } from './calendarTypes';
+import CalendarView from './CalendarView';
 
-// ─── Localizer ───────────────────────────────────────────────────────────────
 
-const locales = { es };
-
-const localizer = dateFnsLocalizer({
-    format,
-    parse,
-    startOfWeek,
-    getDay,
-    locales,
-});
-
-// ─── Tipos ───────────────────────────────────────────────────────────────────
-
-interface CalendarEvent extends Event {
-    title: string;
-    start: Date;
-    end: Date;
-    resource?: EventoCalendario;
-}
-
-// Convierte un EventoCalendario del API al formato interno del calendario.
-// Se reutiliza para el listado y para el deep link (?evento=<id>) de
-// notificaciones: el evento puede no estar en el rango inicial cargado.
-const toCalendarEvent = (ev: EventoCalendario): CalendarEvent => ({
-    title: ev.titulo,
-    start: new Date(ev.fecha_inicio),
-    end: new Date(ev.fecha_fin),
-    resource: ev,
-});
 
 // ─── Componente ──────────────────────────────────────────────────────────────
 
@@ -69,20 +43,9 @@ const CalendarioPage = () => {
     const [isTipoAdminOpen, setIsTipoAdminOpen] = useState(false);
     const [slotPrefill, setSlotPrefill] = useState<{ start: Date; end: Date } | null>(
         null
-    );
-
-    // Wrapper condicional: admin obtiene drag & drop, recepción no.
-    // useMemo mantiene la identidad del componente estable entre renders.
-    const DnDCalendar = useMemo(
-        () =>
-            (isAdmin ? withDragAndDrop<CalendarEvent>(Calendar) : Calendar) as ReturnType<
-                typeof withDragAndDrop<CalendarEvent>
-            >,
-        [isAdmin]
-    );
+    );    
 
     // ── Carga de datos ───────────────────────────────────────────────────────
-
     const fetchData = useCallback(async () => {
         setIsLoading(true);
         try {
@@ -122,40 +85,7 @@ const CalendarioPage = () => {
 
     // ── Mapeo a eventos del calendario ───────────────────────────────────────
 
-    const calendarEvents: CalendarEvent[] = eventos.map(toCalendarEvent);
-
-    // ── Estilos por tipo ─────────────────────────────────────────────────────
-
-// ─── Estilos por tipo ─────────────────────────────────────────────────────
-
-// Elige texto blanco u oscuro según la luminancia del color de fondo
-// para mantener legibilidad con colores claros (ej: verde claro).
-const getContrastText = (hexColor: string): string => {
-    const hex = hexColor.replace('#', '');
-    if (hex.length !== 6) return '#fff';
-    const r = parseInt(hex.slice(0, 2), 16);
-    const g = parseInt(hex.slice(2, 4), 16);
-    const b = parseInt(hex.slice(4, 6), 16);
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    return luminance > 0.6 ? '#1f2937' : '#fff';
-};
-
-const eventPropGetter = useCallback(
-    (event: CalendarEvent) => {
-        const color = event.resource?.tipo_detalle?.color || '#3B82F6';
-        return {
-            style: {
-                backgroundColor: color,
-                borderColor: color,
-                borderRadius: '4px',
-                color: getContrastText(color),
-                fontSize: '0.8rem',
-                border: 'none',
-            },
-        };
-    },
-    []
-);
+    const calendarEvents: CalendarEvent[] = eventos.map(toCalendarEvent);   
 
     // ── Handlers ─────────────────────────────────────────────────────────────
 
@@ -210,7 +140,6 @@ const eventPropGetter = useCallback(
     };
 
     // ── Render ───────────────────────────────────────────────────────────────
-
     return (
         <main className="bg-surface-container-lowest w-full flex flex-col gap-y-6 p-4 rounded-xl">
             {/* Encabezado */}
@@ -251,36 +180,13 @@ const eventPropGetter = useCallback(
                 <div className="text-center py-12 text-secondary">Cargando eventos...</div>
             ) : (
                 <section className="bg-surface-container-high rounded-xl p-4">
-                    <DnDCalendar
-                        localizer={localizer}
+                    <CalendarView
+                        isAdmin={isAdmin}
                         events={calendarEvents}
-                        startAccessor="start"
-                        endAccessor="end"
-                        style={{ height: 650 }}
-                        views={['month', 'week', 'day', 'agenda']}
-                        defaultView="month"
-                        messages={{
-                            next: 'Siguiente',
-                            previous: 'Anterior',
-                            today: 'Hoy',
-                            month: 'Mes',
-                            week: 'Semana',
-                            day: 'Día',
-                            agenda: 'Agenda',
-                            date: 'Fecha',
-                            time: 'Hora',
-                            event: 'Evento',
-                            noEventsInRange: 'No hay eventos en este rango',
-                            showMore: (count: number) => `+${count} más`,
-                        }}
-                        eventPropGetter={eventPropGetter}
                         onSelectEvent={handleSelectEvent}
                         onSelectSlot={handleSelectSlot}
                         onEventDrop={handleEventDrop}
-                        onEventResize={handleEventResize}
-                        resizable={isAdmin}
-                        popup
-                        selectable
+                        onEventResize={handleEventResize}   
                     />
                 </section>
             )}
