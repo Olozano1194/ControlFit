@@ -31,7 +31,7 @@ const createWrapper = () => {
     );
 };
 
-describe('DemoRequestsPage', () => {
+describe('DemoRequestsPage - toggle success toasts', () => {
     const mockDemoRequests = [
         {
             id: 1,
@@ -73,61 +73,6 @@ describe('DemoRequestsPage', () => {
         vi.resetAllMocks();
     });
 
-    it('renders demo requests table with correct data', async () => {
-        render(<DemoRequestsPage />, { wrapper: createWrapper() });
-
-        await waitFor(() => {
-            // Header text is split: "Solicitudes de" + "Demo" in separate elements
-            expect(screen.getByText('Solicitudes de')).toBeInTheDocument();
-            expect(screen.getByText('Demo')).toBeInTheDocument();
-        });
-
-        expect(screen.getByText('Gym Test')).toBeInTheDocument();
-        expect(screen.getByText('Gym Pro')).toBeInTheDocument();
-        expect(screen.getByText('Juan Pérez')).toBeInTheDocument();
-        expect(screen.getByText('María García')).toBeInTheDocument();
-        expect(screen.getByText('juan@example.com')).toBeInTheDocument();
-        expect(screen.getByText('maria@example.com')).toBeInTheDocument();
-    });
-
-    it('shows loading state on badge click during mutation', async () => {
-        let resolveMutation: (value: unknown) => void;
-        const mutationPromise = new Promise<unknown>((resolve) => {
-            resolveMutation = resolve;
-        });
-        (demoRequestsApi.updateDemoRequestEstado as vi.Mock).mockReturnValue(mutationPromise);
-
-        render(<DemoRequestsPage />, { wrapper: createWrapper() });
-
-        await waitFor(() => {
-            expect(screen.getByText('Gym Test')).toBeInTheDocument();
-        });
-
-        // Click the first badge (Pendiente -> Contactado)
-        const pendienteBadge = screen.getByText('Pendiente');
-        await userEvent.click(pendienteBadge);
-
-        // Should show loading spinner and "Cargando..." text
-        await waitFor(() => {
-            expect(screen.getByText('Cargando...')).toBeInTheDocument();
-        });
-
-        // Badge should be disabled during loading
-        const loadingBadge = screen.getByText('Cargando...').closest('button');
-        expect(loadingBadge).toBeDisabled();
-
-        // Resolve the mutation
-        const updatedDemo = { ...mockDemoRequests[0], estado: 'contactado' as const };
-        act(() => {
-            resolveMutation!(updatedDemo);
-        });
-
-        // Loading state should be gone
-        await waitFor(() => {
-            expect(screen.queryByText('Cargando...')).not.toBeInTheDocument();
-        });
-    });
-
     it('shows success toast with gym_creado on pendiente→contactado transition', async () => {
         const updatedDemo = {
             ...mockDemoRequests[0],
@@ -154,7 +99,6 @@ describe('DemoRequestsPage', () => {
         await userEvent.click(pendienteBadge);
 
         await waitFor(() => {
-            // Use getAllByText to handle potential duplicates from react-hot-toast in tests
             const toasts = screen.getAllByText(/¡Gimnasio creado!/);
             expect(toasts.length).toBeGreaterThan(0);
             expect(toasts[0]).toHaveTextContent(/Credenciales enviadas a juan@example.com/);
@@ -186,80 +130,15 @@ describe('DemoRequestsPage', () => {
         });
     });
 
-    it('shows email duplicate error toast on 400 response with email field', async () => {
-        const errorResponse = {
-            response: {
-                data: {
-                    email: ['Este email ya está registrado. Usá otro email o contactá a soporte.'],
-                },
-            },
-        };
-        (demoRequestsApi.updateDemoRequestEstado as vi.Mock).mockRejectedValue(errorResponse);
-
-        render(<DemoRequestsPage />, { wrapper: createWrapper() });
-
-        await waitFor(() => {
-            expect(screen.getByText('Gym Test')).toBeInTheDocument();
-        });
-
-        const pendienteBadge = screen.getByText('Pendiente');
-        await userEvent.click(pendienteBadge);
-
-        await waitFor(() => {
-            const toasts = screen.getAllByText(/Este email ya está registrado/);
-            expect(toasts.length).toBeGreaterThan(0);
-        });
-    });
-
-    it('handles generic error toast on 500/network error', async () => {
-        const errorResponse = {
-            response: {
-                data: {
-                    detail: 'Error interno del servidor',
-                },
-            },
-        };
-        (demoRequestsApi.updateDemoRequestEstado as vi.Mock).mockRejectedValue(errorResponse);
-
-        render(<DemoRequestsPage />, { wrapper: createWrapper() });
-
-        await waitFor(() => {
-            expect(screen.getByText('Gym Test')).toBeInTheDocument();
-        });
-
-        const pendienteBadge = screen.getByText('Pendiente');
-        await userEvent.click(pendienteBadge);
-
-        await waitFor(() => {
-            const toasts = screen.getAllByText(/Error/);
-            expect(toasts.length).toBeGreaterThan(0);
-            // Check for either the generic error or the detail message
-            const found = toasts.some(t => 
-                t.textContent?.includes('Error al actualizar') || 
-                t.textContent?.includes('Error interno del servidor') ||
-                t.textContent?.includes('No se pudo cambiar')
-            );
-            expect(found).toBe(true);
-        });
-    });
-
-    it('does not navigate on success (no window.location change)', async () => {
+    it('shows simple success toast for idempotent state change without gym_creado', async () => {
         const updatedDemo = {
             ...mockDemoRequests[0],
             estado: 'contactado' as const,
-            gym_creado: {
-                id: 10,
-                name: 'Gym Test',
-                address: 'Calle 123',
-                phone: '3001234567',
-                is_active: true,
-                created_at: '2024-01-15T11:00:00Z',
-            },
-            email_sent: true,
+            gym_creado: null,
+            email_sent: false,
         };
         (demoRequestsApi.updateDemoRequestEstado as vi.Mock).mockResolvedValue(updatedDemo);
 
-        const originalLocation = window.location.href;
         render(<DemoRequestsPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
@@ -270,12 +149,9 @@ describe('DemoRequestsPage', () => {
         await userEvent.click(pendienteBadge);
 
         await waitFor(() => {
-            const toasts = screen.getAllByText(/¡Gimnasio creado!/);
+            const toasts = screen.getAllByText(/Estado actualizado: la solicitud ahora está contactada/);
             expect(toasts.length).toBeGreaterThan(0);
         });
-
-        // Verify no navigation occurred
-        expect(window.location.href).toBe(originalLocation);
     });
 
     it('prevents double-click during loading state', async () => {
@@ -303,30 +179,6 @@ describe('DemoRequestsPage', () => {
         // Resolve the mutation
         act(() => {
             resolveMutation!({ ...mockDemoRequests[0], estado: 'contactado' as const });
-        });
-    });
-
-    it('shows simple success toast for idempotent state change without gym_creado', async () => {
-        const updatedDemo = {
-            ...mockDemoRequests[0],
-            estado: 'contactado' as const,
-            gym_creado: null,
-            email_sent: false,
-        };
-        (demoRequestsApi.updateDemoRequestEstado as vi.Mock).mockResolvedValue(updatedDemo);
-
-        render(<DemoRequestsPage />, { wrapper: createWrapper() });
-
-        await waitFor(() => {
-            expect(screen.getByText('Gym Test')).toBeInTheDocument();
-        });
-
-        const pendienteBadge = screen.getByText('Pendiente');
-        await userEvent.click(pendienteBadge);
-
-        await waitFor(() => {
-            const toasts = screen.getAllByText(/Estado actualizado: la solicitud ahora está contactada/);
-            expect(toasts.length).toBeGreaterThan(0);
         });
     });
 });
