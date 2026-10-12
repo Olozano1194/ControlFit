@@ -50,12 +50,14 @@ class CSRFValidationMiddleware:
 
         # Skip validation for login, refresh, logout, verify, register endpoints
         # These are handled by their respective views
+        # Also skip public demo request creation (AllowAny endpoint)
         skip_paths = (
             '/gym/api/v1/token/',
             '/gym/api/v1/token/refresh/',
             '/gym/api/v1/token/verify/',
             '/gym/api/v1/auth/logout/',
             '/gym/api/v1/register/',
+            '/gym/api/v1/solicitudes-demo/',
         )
         if any(request.path.startswith(p) for p in skip_paths):
             return self.get_response(request)
