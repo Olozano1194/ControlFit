@@ -15,6 +15,8 @@ import { toast } from 'react-hot-toast';
 import { MemberDay } from "../../../model/memberDay.model";
 // icons
 import { IoSearch } from "react-icons/io5";
+//Error handling
+import { getApiErrorMessage } from "../../../utils/apiError";
 
 
 interface MiembroTotal {
@@ -56,8 +58,7 @@ const ListMiembroDay = () => {
                 const data = await getMembersDay();
                 setUser(data);
             }catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Error al cargar los datos';
-                toast.error(errorMessage);
+                toast.error(getApiErrorMessage(error, 'Error al cargar los datos'));
             }finally {
                 setIsLoading(false);
             }

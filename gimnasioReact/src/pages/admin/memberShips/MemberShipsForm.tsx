@@ -12,6 +12,8 @@ import { toast } from "react-hot-toast";
 import { Input, Label, Button } from '../../../components/ui/index';
 //API
 import { createMemberShips, updateMemberShips, getMemberShips } from '../../../api/action/memberShips.api';
+//Error handling
+import { getApiErrorMessage } from '../../../utils/apiError';
 
 
 interface MembresiaForm {
@@ -71,11 +73,13 @@ const MemberShipsForm = () => {
             navigate('/dashboard/memberships-list');
 
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error al registrar la membresía';
-            toast.error(errorMessage, {
-                duration: 3000,
-                position: 'bottom-right',
-            });
+            toast.error(
+                getApiErrorMessage(error, 'Error al registrar la membresía'),
+                {
+                    duration: 3000,
+                    position: 'bottom-right',
+                }
+            );
         }
 
     });

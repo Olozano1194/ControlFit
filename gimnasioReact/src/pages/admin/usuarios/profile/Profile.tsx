@@ -15,6 +15,8 @@ import BreadCrumbsSection from "../../../../components/form/section/BreadCrumbsS
 import { toast } from "react-hot-toast";
 //ui
 import { Input, Label, Button, Select } from '../../../../components/ui/index';
+//Error handling
+import { getApiErrorMessage } from '../../../../utils/apiError';
 
 
 interface FormData {
@@ -67,11 +69,13 @@ const Profile = () => {
                 }
 
             } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Error al mostrar el perfil del usuario';
-                toast.error(errorMessage, {
-                    duration: 3000,
-                    position: 'bottom-right',
-                });
+                toast.error(
+                    getApiErrorMessage(error, 'Error al mostrar el perfil del usuario'),
+                    {
+                        duration: 3000,
+                        position: 'bottom-right',
+                    }
+                );
             }
         };
         fetchData();
@@ -137,8 +141,7 @@ const Profile = () => {
                 });
             }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error al actualizar el Usuario';
-            toast.error(errorMessage);
+            toast.error(getApiErrorMessage(error, 'Error al actualizar el Usuario'));
         }
     };
 

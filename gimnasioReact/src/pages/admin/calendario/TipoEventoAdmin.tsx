@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { getTiposEvento } from '../../../api/action/calendario.api';
 import { TipoEvento } from '../../../model/calendario.model';
+import { getApiErrorMessage } from '../../../utils/apiError';
 import TipoEventoList from './TipoEventoList';
 import TipoEventoForm from './TipoEventoForm';
 
@@ -27,11 +28,9 @@ const TipoEventoAdmin = ({ onSuccess }: TipoEventoAdminProps) => {
             const data = await getTiposEvento();
             setTipos(data);
         } catch (error) {
-            const msg =
-                error instanceof Error
-                    ? error.message
-                    : 'Error al cargar tipos de evento';
-            toast.error(msg);
+            toast.error(
+                getApiErrorMessage(error, 'Error al cargar tipos de evento')
+            );
         } finally {
             setIsLoading(false);
         }

@@ -7,6 +7,7 @@ import { FaWhatsapp } from "react-icons/fa6";
 // Notifications API
 import { getNotifications, markOneRead, markAllAsRead } from "../../../api/action/notifications.api";
 import { Notification } from "../../../model/notifications.model";
+import { getApiErrorMessage } from "../../../utils/apiError";
 
 const NotificationsPage = () => {
     const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -20,7 +21,7 @@ const NotificationsPage = () => {
                 const data = await getNotifications();
                 setNotifications(data);
             } catch (error) {
-                toast.error(error instanceof Error ? error.message : 'Error al cargar notificaciones');
+                toast.error(getApiErrorMessage(error, 'Error al cargar notificaciones'));
             } finally {
                 setLoading(false);
             }
@@ -33,7 +34,7 @@ const NotificationsPage = () => {
             await markOneRead(id);
             setNotifications((prev) => prev.filter((n) => n.id !== id));
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'Error al marcar como leída');
+            toast.error(getApiErrorMessage(error, 'Error al marcar como leída'));
         }
     };
 
@@ -43,7 +44,7 @@ const NotificationsPage = () => {
             setNotifications([]);
             toast.success('Todas las notificaciones fueron marcadas como leídas');
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'Error al marcar como leídas');
+            toast.error(getApiErrorMessage(error, 'Error al marcar como leídas'));
         }
     };
 

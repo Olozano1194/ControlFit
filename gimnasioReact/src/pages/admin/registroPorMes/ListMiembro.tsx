@@ -18,6 +18,8 @@ import { Miembro } from "../../../model/member.model";
 import { AsignarMemberShips } from "../../../model/asignarMemberShips.model";
 // icons
 import { IoSearch } from "react-icons/io5";
+//Error handling
+import { getApiErrorMessage } from "../../../utils/apiError";
 
 interface MiembroConEstado extends Miembro {
     membresia?: string;
@@ -135,8 +137,7 @@ const ListMiembro = () => {
                 setUser(membersRes);
                 setAsignaciones(asignacionesRes);
             }catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Error al cargar los datos';
-                toast.error(errorMessage);
+                toast.error(getApiErrorMessage(error, 'Error al cargar los datos'));
             }finally {
                 setIsLoading(false);
             }
