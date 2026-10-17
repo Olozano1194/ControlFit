@@ -3,6 +3,7 @@ import { useForm, Controller, type Control, type FieldErrors } from 'react-hook-
 import { toast } from 'react-hot-toast';
 import { axiosPrivate } from '@/api/axios/axios.private';
 import type { AsignarMemberShips } from '@/model/asignarMemberShips.model';
+import { getApiErrorMessage } from '@/utils/apiError';
 
 export interface RefundFormData {
   monto: string;
@@ -125,19 +126,7 @@ export function useRefundModal({
       onSuccess();
       onClose();
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Error al registrar la devolución';
-      if (err && typeof err === 'object' && 'response' in err) {
-        const errResponse = (err as { response?: { data?: Record<string, string[]> } }).response;
-        if (errResponse?.data) {
-          const firstError = Object.values(errResponse.data)[0];
-          if (Array.isArray(firstError) && firstError.length > 0) {
-            toast.error(firstError[0]);
-            setIsSubmitting(false);
-            return;
-          }
-        }
-      }
-      toast.error(`Error: ${errorMessage}`);
+      toast.error(getApiErrorMessage(err, 'Error al registrar la devolución'));
     } finally {
       setIsSubmitting(false);
     }

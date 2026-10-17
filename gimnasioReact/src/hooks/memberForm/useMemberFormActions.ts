@@ -9,6 +9,7 @@ import { updateAsignarMemberShips } from '../../api/action/asignarMemberShips.ap
 import type { CreateMemberDto } from '../../model/dto/member.dto';
 import type { CreateAsignarMemberShipsDto } from '../../model/dto/asignarMemberShips.dto';
 import { formatDateForInput } from '../../utils/dateUtils';
+import { getApiErrorMessage } from '../../utils/apiError';
 
 
 interface UseMemberFormActionsParams {
@@ -253,8 +254,7 @@ const useMemberFormActions = ({
                     navigate('/dashboard/asignar-membresia-list');
                 }
             } catch (err) {
-                const errorMessage = err instanceof Error ? err.message : 'Error desconocido al procesar la solicitud';
-                toast.error(`Error: ${errorMessage}`);
+                toast.error(getApiErrorMessage(err, 'Error desconocido al procesar la solicitud'));
             }
         },
         [

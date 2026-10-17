@@ -1,7 +1,6 @@
 import { useForm } from 'react-hook-form';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { IoClose } from 'react-icons/io5';
 import {
     createTipoEvento,
     updateTipoEvento,
@@ -11,6 +10,8 @@ import {
     CreateTipoEventoDto,
 } from '../../../model/calendario.model';
 import { Input, Label } from '../../../components/ui/index';
+import { getApiErrorMessage } from '../../../utils/apiError';
+import ModalWrapper from './eventForm/ModalWrapper';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -37,6 +38,7 @@ const TipoEventoForm = ({
     onSuccess,
 }: TipoEventoFormProps) => {
     const isEditing = !!tipo;
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const {
         register,
         handleSubmit,
@@ -66,6 +68,7 @@ const TipoEventoForm = ({
     // ── Submit ───────────────────────────────────────────────────────────────
 
     const onSubmit = handleSubmit(async (data: FormData) => {
+        setIsSubmitting(true);
         try {
             const dto: CreateTipoEventoDto = {
                 nombre: data.nombre,
@@ -88,12 +91,10 @@ const TipoEventoForm = ({
                     'Ya existe un tipo con ese nombre en este gimnasio'
                 );
             } else {
-                const msg =
-                    error instanceof Error
-                        ? error.message
-                        : 'Error al guardar el tipo';
-                toast.error(msg);
+                toast.error(getApiErrorMessage(error, 'Error al guardar el tipo'));
             }
+        } finally {
+            setIsSubmitting(false);
         }
     });
 
@@ -102,108 +103,104 @@ const TipoEventoForm = ({
     // ── Render ───────────────────────────────────────────────────────────────
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-            <div className="bg-surface-container-lowest rounded-xl shadow-2xl w-full max-w-md mx-4 p-6 relative">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold text-on-surface">
-                        {isEditing
-                            ? 'Editar Tipo de Evento'
-                            : 'Nuevo Tipo de Evento'}
-                    </h3>
-                    <button
-                        onClick={onClose}
-                        className="text-secondary cursor-pointer hover:text-on-surface transition-colors"
-                        aria-label="Cerrar"
-                    >
-                        <IoClose size={24} />
-                    </button>
+        <ModalWrapper
+            title={isEditing ? 'Editar Tipo de Evento' : 'Nuevo Tipo de Evento'}
+            onClose={onClose}
+        >
+            <form onSubmit={onSubmit} className="space-y-6">
+                {/* Nombre */}
+                <div className="relative pt-5">
+                    <Input
+                        id="nombre"
+                        type="text"
+                        placeholder=""
+                        aria-invalid={!!errors.nombre}
+                        aria-describedby={errors.nombre ? 'nombre-error' : undefined}
+                        {...register('nombre', {
+                            required: {
+                                value: true,
+                                message: 'El nombre es requerido',
+                            },
+                            minLength: {
+                                value: 2,
+                                message: 'Mínimo 2 caracteres',
+                            },
+                            maxLength: {
+                                value: 50,
+                                message: 'Máximo 50 caracteres',
+                            },
+                        })}
+                    />
+                    <Label htmlFor="nombre">Nombre *</Label>
+                    {errors.nombre && (
+                        <span id="nombre-error" className="text-red-500 text-sm" role="alert">
+                            {errors.nombre.message}
+                        </span>
+                    )}
                 </div>
 
-                <form onSubmit={onSubmit} className="space-y-6">
-                    {/* Nombre */}
-                    <div className="relative pt-5">
-                        <Input
-                            type="text"
-                            placeholder=""
-                            {...register('nombre', {
+                {/* Color picker */}
+                <div className="relative pt-5">
+                    <div className="flex items-center gap-4">
+                        <input
+                            id="color"
+                            type="color"
+                            aria-invalid={!!errors.color}
+                            aria-describedby={errors.color ? 'color-error' : undefined}
+                            {...register('color', {
                                 required: {
                                     value: true,
-                                    message: 'El nombre es requerido',
-                                },
-                                minLength: {
-                                    value: 2,
-                                    message: 'Mínimo 2 caracteres',
-                                },
-                                maxLength: {
-                                    value: 50,
-                                    message: 'Máximo 50 caracteres',
+                                    message: 'El color es requerido',
                                 },
                             })}
+                            className="w-12 h-12 rounded-lg cursor-pointer border border-outline-variant/20"
                         />
-                        <Label>Nombre *</Label>
-                        {errors.nombre && (
-                            <span className="text-red-500 text-sm">
-                                {errors.nombre.message}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Color picker */}
-                    <div className="relative pt-5">
-                        <div className="flex items-center gap-4">
-                            <input
-                                type="color"
-                                {...register('color', {
-                                    required: {
-                                        value: true,
-                                        message: 'El color es requerido',
-                                    },
-                                })}
-                                className="w-12 h-12 rounded-lg cursor-pointer border border-outline-variant/20"
-                            />
-                            <span className="font-mono text-sm text-secondary">
-                                {selectedColor || DEFAULT_COLOR}
-                            </span>
-                        </div>
-                        <Label>Color *</Label>
-                        {errors.color && (
-                            <span className="text-red-500 text-sm">
-                                {errors.color.message}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Preview visual */}
-                    <div className="flex items-center gap-3 p-3 rounded-lg bg-surface-container-high">
-                        <span
-                            className="inline-block w-8 h-8 rounded-full border border-outline-variant/20"
-                            style={{ backgroundColor: selectedColor || DEFAULT_COLOR }}
-                        />
-                        <span className="text-sm text-on-surface">
-                            Vista previa del color
+                        <span className="font-mono text-sm text-secondary">
+                            {selectedColor || DEFAULT_COLOR}
                         </span>
                     </div>
+                    <Label htmlFor="color">Color *</Label>
+                    {errors.color && (
+                        <span id="color-error" className="text-red-500 text-sm" role="alert">
+                            {errors.color.message}
+                        </span>
+                    )}
+                </div>
 
-                    {/* Actions */}
-                    <div className="flex gap-3 pt-4 border-t border-surface-container-high">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 bg-surface-container-high cursor-pointer font-semibold px-4 py-2 rounded-lg text-sm text-on-surface transition-colors hover:bg-surface-container-high/80"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="submit"
-                            className="flex-1 bg-sky-600 cursor-pointer font-semibold px-4 py-2 rounded-lg text-sm text-white transition-colors hover:bg-sky-500"
-                        >
-                            {isEditing ? 'Actualizar' : 'Crear Tipo'}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+                {/* Preview visual */}
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-surface-container-high">
+                    <span
+                        className="inline-block w-8 h-8 rounded-full border border-outline-variant/20"
+                        style={{ backgroundColor: selectedColor || DEFAULT_COLOR }}
+                    />
+                    <span className="text-sm text-on-surface">
+                        Vista previa del color
+                    </span>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3 pt-4 border-t border-surface-container-high">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="flex-1 bg-surface-container-high cursor-pointer font-semibold px-4 py-2 rounded-lg text-sm text-on-surface transition-colors hover:bg-surface-container-high/80"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="flex-1 bg-sky-600 cursor-pointer font-semibold px-4 py-2 rounded-lg text-sm text-white transition-colors hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isSubmitting
+                            ? 'Guardando...'
+                            : isEditing
+                              ? 'Actualizar'
+                              : 'Crear Tipo'}
+                    </button>
+                </div>
+            </form>
+        </ModalWrapper>
     );
 };
 

@@ -5,6 +5,7 @@ import { axiosPrivate } from '@/api/axios/axios.private';
 import type { AsignarMemberShips } from '@/model/asignarMemberShips.model';
 import type { Membresia } from '@/model/memberShips.model';
 import { calculateCambiarPlanPreview, type CambiarPlanPreviewData } from '@/utils/cambiarPlanUtils';
+import { getApiErrorMessage } from '@/utils/apiError';
 
 export interface CambiarPlanFormData {
   nueva_membresia_id: string;
@@ -164,19 +165,7 @@ export function useCambiarPlanModal({
       onSuccess();
       onClose();
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Error al cambiar el plan';
-      if (err && typeof err === 'object' && 'response' in err) {
-        const errResponse = (err as { response?: { data?: Record<string, string[]> } }).response;
-        if (errResponse?.data) {
-          const firstError = Object.values(errResponse.data)[0];
-          if (Array.isArray(firstError) && firstError.length > 0) {
-            toast.error(firstError[0]);
-            setIsSubmitting(false);
-            return;
-          }
-        }
-      }
-      toast.error(`Error: ${errorMessage}`);
+      toast.error(getApiErrorMessage(err, 'Error al cambiar el plan'));
     } finally {
       setIsSubmitting(false);
     }

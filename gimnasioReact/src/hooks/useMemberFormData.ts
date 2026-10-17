@@ -7,6 +7,7 @@ import type { Miembro } from '../model/member.model';
 import type { AsignarMemberShips } from '../model/asignarMemberShips.model';
 import { filterActiveMemberships, mergeCurrentMembership } from '../utils/membershipUtils';
 import { formatDateForInput } from '../utils/dateUtils';
+import { getApiErrorMessage } from '../utils/apiError';
 
 export interface UseMemberFormDataReturn {
   membresias: Membresia[];
@@ -65,8 +66,7 @@ export function useMemberFormData({ id }: UseMemberFormDataParams): UseMemberFor
       setMembresias(activeMembresias);
       setMiembros(miembrosResponse);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error al cargar los datos';
-      setError(errorMessage);
+      setError(getApiErrorMessage(err, 'Error al cargar los datos'));
     } finally {
       setLoading(false);
     }

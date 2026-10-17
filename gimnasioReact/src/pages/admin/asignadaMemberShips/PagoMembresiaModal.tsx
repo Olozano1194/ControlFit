@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { toast } from "react-hot-toast";
 import { createPago } from "../../../api/action/pagoMembresia.api";
 import { Input, Label, Button, Select } from "../../../components/ui/index";
+import { getApiErrorMessage } from "../../../utils/apiError";
 
 const METODOS_PAGO = [
     { value: "efectivo", label: "Efectivo" },
@@ -94,18 +95,7 @@ const PagoMembresiaModal: React.FC<PagoMembresiaModalProps> = ({
             onSuccess();
             onClose();
         } catch (error: unknown) {
-            let errorMessage = "Error al registrar el pago";
-            if (error && typeof error === 'object' && 'response' in error) {
-                const axiosErr = error as { response: { data: Record<string, unknown> } };
-                const data = axiosErr.response?.data;
-                if (data) {
-                    const msgs = Object.values(data).flat().filter(Boolean);
-                    if (msgs.length > 0) errorMessage = msgs.join('. ');
-                }
-            } else if (error instanceof Error) {
-                errorMessage = error.message;
-            }
-            toast.error(errorMessage);
+            toast.error(getApiErrorMessage(error, "Error al registrar el pago"));
         } finally {
             setIsSubmitting(false);
         }

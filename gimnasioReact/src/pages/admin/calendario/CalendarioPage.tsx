@@ -10,13 +10,13 @@ import { toast } from 'react-hot-toast';
 import { IoClose } from 'react-icons/io5';
 import {
     getEventos,
-    getTiposEvento,
     getEvento,
     patchEvento,
     deleteEvento,
 } from '../../../api/action/calendario.api';
-import { EventoCalendario, TipoEvento } from '../../../model/calendario.model';
+import { EventoCalendario } from '../../../model/calendario.model';
 import { useAuth } from '../../../context/useAuth';
+import { getApiErrorMessage } from '../../../utils/apiError';
 import EventoForm from './EventoForm';
 import TipoEventoAdmin from './TipoEventoAdmin';
 import { toApiISO, toLocalInputValue, normalizeSlotEnd } from './dateTime';
@@ -35,7 +35,6 @@ const CalendarioPage = () => {
     const isAdmin = user?.roles?.includes('admin') ?? false;
 
     const [eventos, setEventos] = useState<EventoCalendario[]>([]);
-    const [, setTipos] = useState<TipoEvento[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
     const [isEventoFormOpen, setIsEventoFormOpen] = useState(false);
@@ -46,19 +45,17 @@ const CalendarioPage = () => {
     );    
 
     // ── Carga de datos ───────────────────────────────────────────────────────
+    // Los tipos de evento los consume EventoForm al abrirse; acá solo se
+    // necesitan los eventos para pintar el calendario.
     const fetchData = useCallback(async () => {
         setIsLoading(true);
         try {
-            const [eventosData, tiposData] = await Promise.all([
-                getEventos(),
-                getTiposEvento(),
-            ]);
+            const eventosData = await getEventos();
             setEventos(eventosData);
-            setTipos(tiposData);
         } catch (error) {
-            const msg =
-                error instanceof Error ? error.message : 'Error al cargar datos del calendario';
-            toast.error(msg);
+            toast.error(
+                getApiErrorMessage(error, 'Error al cargar datos del calendario')
+            );
         } finally {
             setIsLoading(false);
         }
@@ -123,9 +120,7 @@ const CalendarioPage = () => {
                 toast.success('Evento actualizado correctamente');
                 fetchData();
             } catch (error) {
-                const msg =
-                    error instanceof Error ? error.message : 'Error al mover el evento';
-                toast.error(msg);
+                toast.error(getApiErrorMessage(error, 'Error al mover el evento'));
             }
         },
         [fetchData]
@@ -269,9 +264,10 @@ const CalendarioPage = () => {
                                             })
                                             .catch((err) =>
                                                 toast.error(
-                                                    err instanceof Error
-                                                        ? err.message
-                                                        : 'Error al eliminar'
+                                                    getApiErrorMessage(
+                                                        err,
+                                                        'Error al eliminar'
+                                                    )
                                                 )
                                             );
                                     }}

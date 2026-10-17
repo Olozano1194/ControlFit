@@ -12,6 +12,8 @@ import BreadCrumbsSection from "../../components/form/section/BreadCrumbsSection
 import { CreateUsers } from '../../api/users/users.api';
 //Models
 import { User } from '../../model/user.model';
+//Error handling
+import { getApiErrorMessage } from '../../utils/apiError';
 
 
 const Register = () => {
@@ -38,8 +40,7 @@ const Register = () => {
             navigate('/dashboard/listUser');
 
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error al registrar el miembro';
-            toast.error(errorMessage);
+            toast.error(getApiErrorMessage(error, 'Error al registrar el miembro'));
         }
 
     });

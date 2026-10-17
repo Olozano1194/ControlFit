@@ -14,6 +14,8 @@ import { Input, Label, Button } from '../../../components/ui/index';
 import { createMemberDay, getMember, updateMember } from '../../../api/action/userGymDay.api';
 //Models
 import { MemberDay } from '../../../model/memberDay.model';
+//Error handling
+import { getApiErrorMessage } from '../../../utils/apiError';
 
 
 const RegisterMiembroDay = () => {
@@ -66,11 +68,13 @@ const RegisterMiembroDay = () => {
 
 
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error al registrar el miembro diario';
-            toast.error(errorMessage, {
-                duration: 3000,
-                position: 'bottom-right',
-            });
+            toast.error(
+                getApiErrorMessage(error, 'Error al registrar el miembro diario'),
+                {
+                    duration: 3000,
+                    position: 'bottom-right',
+                }
+            );
         }
 
     });

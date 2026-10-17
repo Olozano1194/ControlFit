@@ -18,6 +18,8 @@ import { IoSearch } from "react-icons/io5";
 import { FaMoneyBillWave } from "react-icons/fa";
 // Modal de pago
 import PagoMembresiaModal from "./PagoMembresiaModal";
+//Error handling
+import { getApiErrorMessage } from "../../../utils/apiError";
 
 
 interface AsignacionTotal {
@@ -74,8 +76,7 @@ const ListAsignarMemberShips = () => {
             const response = await getAsignarMemberList();
             setAsignarMemberShips(response);
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error al cargar los datos';
-            toast.error(errorMessage);
+            toast.error(getApiErrorMessage(error, 'Error al cargar los datos'));
         } finally {
             setIsLoading(false);
         }

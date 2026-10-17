@@ -11,6 +11,8 @@ import HeaderSection from "../../../components/table/section/HeaderSection";
 import { toast } from 'react-hot-toast';
 //Models
 import { User } from '../../../model/user.model';
+//Error handling
+import { getApiErrorMessage } from '../../../utils/apiError';
 
 
 const ListUser = () => {
@@ -25,8 +27,7 @@ const ListUser = () => {
                 //console.log('User data received:', data);                
                 setUser(data);
             }catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Error al cargar los datos';
-                toast.error(errorMessage);
+                toast.error(getApiErrorMessage(error, 'Error al cargar los datos'));
             }finally {
                 setIsLoading(false);
             }

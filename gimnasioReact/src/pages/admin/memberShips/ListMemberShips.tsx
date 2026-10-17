@@ -13,6 +13,8 @@ import HeaderSection from "../../../components/table/section/HeaderSection";
 import { toast } from 'react-hot-toast';
 //Models
 import { Membresia } from "../../../model/memberShips.model";
+//Error handling
+import { getApiErrorMessage } from "../../../utils/apiError";
 
 
 
@@ -36,8 +38,7 @@ const ListMemberShips = () => {
                 const data = await getMemberList();
                 setMemberShips(data);
             } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Error al cargar los datos';
-                toast.error(errorMessage);
+                toast.error(getApiErrorMessage(error, 'Error al cargar los datos'));
             } finally {
                 setIsLoading(false);
             }

@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 import { toast } from 'react-hot-toast';
 //Icons
 import { RiDeleteBinLine, RiPencilLine } from "react-icons/ri";
+//Error handling
+import { getApiErrorMessage } from "../../utils/apiError";
 
 interface ActionButtonsProps {
     id: number;
@@ -30,8 +32,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ id, editPath, onDelete, c
                 },
             });             
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Error al eliminar';
-            toast.error(errorMessage);
+            toast.error(getApiErrorMessage(error, 'Error al eliminar'));
         }
     };
 
