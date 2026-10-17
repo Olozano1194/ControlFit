@@ -1,54 +1,64 @@
-# React + TypeScript + Vite
+# ControlFit — Frontend (React + TypeScript + Vite)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+SPA del sistema de gestión de gimnasios ControlFit. Consume la API Django/DRF del backend (carpetas `../gimnasio/` y `../gimnasioApp/`). Para el panorama completo del proyecto, ver el [`README` raíz](../README.md).
 
-Currently, two official plugins are available:
+## Requisitos
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Node.js 20+
+- Backend corriendo localmente (ver [`../README.md`](../README.md))
 
-## Expanding the ESLint configuration
+## Puesta en marcha
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```bash
+npm install
+npm run dev        # http://localhost:5173
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Depende del backend en `http://localhost:8000`. El endpoint se configura en `.env`:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+```env
+VITE_API_URL_DEV=http://localhost:8000/gym/api/v1
+VITE_API_URL_PROD=https://tu-dominio.render.com/gym/api/v1
 ```
+
+## Scripts
+
+| Script | Acción |
+|--------|--------|
+| `npm run dev` | Servidor de desarrollo (Vite + HMR) |
+| `npm run build` | Typecheck (`tsc -b`) + build de producción |
+| `npm run preview` | Sirve el build generado localmente |
+| `npm run lint` | ESLint (incluye la regla `max-lines: 250`) |
+| `npm test` | Suite completa (Vitest) |
+| `npm run test:watch` | Vitest en modo watch |
+
+## Gate antes de cerrar un cambio
+
+Obligatorio antes de dar por terminado un cambio:
+
+```bash
+npx tsc -b        # typecheck
+npm run lint      # ESLint
+npm test          # Vitest
+```
+
+## Estructura
+
+| Ruta | Contenido |
+|------|-----------|
+| `src/api/axios/` | Instancias axios + lógica de refresh del token |
+| `src/api/action/` | Clients de API por módulo |
+| `src/model/` | DTOs / modelos TypeScript |
+| `src/context/` | AuthContext |
+| `src/components/` | Componentes reutilizables (ui, formularios, tablas) |
+| `src/pages/auth/` | Login, Register, SolicitarDemo |
+| `src/pages/admin/` | Dashboard, miembros, membresías, calendario, notificaciones, demos |
+| `src/routes/protectedRoute/` | ProtectedRoute, SuperAdminRoute |
+| `src/utils/` | Helpers: `authStorage.ts`, `apiError.ts`, `dateUtils.ts`, ... |
+
+## Convenciones
+
+- **Máximo 250 líneas por archivo**, sin excepciones para archivos nuevos.
+- **Commits en Conventional Commits con descripción en español**, sin atribución a IA.
+
+Detalle completo y cómo se hace cumplir en [`../AGENTS.md`](../AGENTS.md).
