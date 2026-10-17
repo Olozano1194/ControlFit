@@ -21,10 +21,10 @@ Sistema fullstack para gestión integral de membresías en gimnasios: usuarios, 
 ## 🛠️ Tecnologías
 
 ### Frontend
-React 18, TypeScript 5.7, Vite 6, Tailwind CSS 4, React Router v7, React Hook Form, Axios (interceptors + auto-refresh), react-big-calendar, Headless UI, TanStack Table.
+React 18, TypeScript 5.7, Vite 6, Tailwind CSS 4, React Router v7, React Hook Form + Zod, TanStack Query, Axios (interceptors + auto-refresh), react-big-calendar, Headless UI, TanStack Table, react-hot-toast. **Testing:** Vitest + Testing Library.
 
 ### Backend
-Django 5.2, Django REST Framework, SimpleJWT (rotación + blacklist), PostgreSQL, CORS Headers, django-storages + boto3 (avatares en Supabase S3).
+Django 5.2, Django REST Framework, SimpleJWT (rotación + blacklist), PostgreSQL, CORS Headers, django-storages + boto3 (avatares en Supabase S3). **Testing:** pytest + pytest-django.
 
 ---
 
@@ -57,6 +57,7 @@ Django 5.2, Django REST Framework, SimpleJWT (rotación + blacklist), PostgreSQL
 - **Notificaciones Automáticas**: Generación perezosa e idempotente (sin cron/Celery), tipos: `por_vencer`, `vencida`, `evento`. Deep links + WhatsApp. Badge con polling 5 min.
 - **Solicitudes de Demo**: Formulario público `/solicitar-demo`, panel gestión `/platform/solicitudes-demo` (protegido por rol `superadmin`).
 - **Exportación**: Reportes en Excel.
+- **Accesibilidad**: modales con `role="dialog"`, labels asociados a inputs y errores anunciados (`role="alert"`).
 - **Responsive**: Optimizado tablet/escritorio.
 
 ---
@@ -123,6 +124,7 @@ ControlFit/
 │   ├── middleware.py         # Multi-tenant (request.gimnasio)
 │   ├── mixins.py             # MultiTenantViewSetMixin, permisos por rol
 │   ├── services/notifications.py  # Generador idempotente
+│   ├── tests/                # Suite de tests (pytest)
 │   └── storage.py            # Storage S3 (Supabase) avatares
 ├── gimnasioReact/            # Frontend React + Vite
 │   └── src/
@@ -133,7 +135,10 @@ ControlFit/
 │       ├── pages/auth/       # Login, Register, SolicitarDemo
 │       ├── pages/admin/      # Dashboard, miembros, membresías, calendario, notificaciones, demos
 │       ├── routes/protectedRoute/  # ProtectedRoute, SuperAdminRoute
-│       └── utils/authStorage.ts    # Access token (sessionStorage)
+│       └── utils/            # authStorage.ts (token), apiError.ts (errores de API)
+├── .githooks/                # Hook commit-msg (Conventional Commits)
+├── AGENTS.md                 # Convenciones de código y commits
+├── pytest.ini                # Configuración de pytest
 ├── .env.example
 ├── requirements.txt
 ├── build.sh                  # Render build phase
@@ -198,6 +203,40 @@ VITE_API_URL_PROD=https://tu-dominio.render.com/gym/api/v1
 3. Configurar variables de entorno en Render (Settings → Environment) con los valores de producción.
 
 `start.sh` es **idempotente**: si los usuarios ya existen, no falla ni duplica.
+
+---
+
+## 🧪 Testing y Calidad
+
+Gate obligatorio antes de cerrar un cambio de frontend (desde `gimnasioReact/`):
+
+```bash
+npx tsc -b        # typecheck
+npm run lint      # ESLint (incluye la regla max-lines)
+npm test          # Vitest (suite completa)
+```
+
+| Área | Runner | Comando | Alcance |
+|------|--------|---------|---------|
+| Frontend | Vitest + Testing Library | `npm test` (en `gimnasioReact/`) | Componentes, hooks y utilidades |
+| Backend | pytest + pytest-django | `pytest` (en la raíz) | API, modelos, auth, servicios |
+
+---
+
+## 🤝 Contribución
+
+Convenciones duras del proyecto (detalle completo en [`AGENTS.md`](./AGENTS.md)):
+
+- **Máximo 250 líneas por archivo.** Sin excepciones para archivos nuevos. En el frontend se hace cumplir con la regla ESLint `max-lines`.
+- **Commits en Conventional Commits con descripción en español**, sin atribución a IA (ej.: `feat(calendario): agregar a11y al formulario de tipo de evento`).
+
+Activar el hook que valida los mensajes de commit (una vez por clon):
+
+```bash
+git config core.hooksPath .githooks
+```
+
+El hook `.githooks/commit-msg` rechaza commits cuyo asunto no cumpla el formato.
 
 ---
 
