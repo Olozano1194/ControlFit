@@ -1,0 +1,2 @@
+# El hook commit-msg debe tener LF para que sh lo interprete correctamente.
+.githooks/** text eol=lf

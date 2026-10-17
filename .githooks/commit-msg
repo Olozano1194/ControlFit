@@ -1,0 +1,28 @@
+#!/bin/sh
+# Hook commit-msg: valida Conventional Commits (regla dura del proyecto).
+# Git lo invoca con la ruta al archivo temporal que contiene el mensaje.
+
+msg_file="$1"
+subject=$(head -n 1 "$msg_file")
+
+# Permitir commits generados automaticamente por git.
+case "$subject" in
+    Merge*|Revert*|"fixup!"*|"squash!"*) exit 0 ;;
+esac
+
+pattern='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9._/-]+\))?!?: .+'
+
+if ! printf '%s\n' "$subject" | grep -Eq "$pattern"; then
+    echo "" >&2
+    echo "  commit-msg: el mensaje NO sigue Conventional Commits." >&2
+    echo "" >&2
+    echo "  Formato:  <tipo>(<scope>): <descripcion en espanol>" >&2
+    echo "  Tipos:    build chore ci docs feat fix perf refactor revert style test" >&2
+    echo "  Ejemplo:  feat(calendario): agregar a11y al formulario de tipo de evento" >&2
+    echo "" >&2
+    echo "  Recibido: $subject" >&2
+    echo "" >&2
+    exit 1
+fi
+
+exit 0
