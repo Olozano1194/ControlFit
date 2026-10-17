@@ -1,0 +1,6 @@
+# Dependencias de desarrollo y test (NO se instalan en produccion).
+# Uso local/CI:  pip install -r requirements-dev.txt
+-r requirements.txt
+
+pytest==9.1.1
+pytest-django==4.14.0
