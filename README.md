@@ -94,7 +94,7 @@ venv\Scripts\activate
 # Linux/Mac
 source venv/bin/activate
 
-pip install -r requirements.txt
+pip install -r requirements-dev.txt  # runtime + herramientas de test
 cp .env.example .env  # Configurar variables
 python manage.py migrate
 python manage.py runserver  # http://localhost:8000
@@ -140,7 +140,8 @@ ControlFit/
 ├── AGENTS.md                 # Convenciones de código y commits
 ├── pytest.ini                # Configuración de pytest
 ├── .env.example
-├── requirements.txt
+├── requirements.txt          # Dependencias de runtime (Render)
+├── requirements-dev.txt      # Runtime + pytest (desarrollo local)
 ├── build.sh                  # Render build phase
 ├── start.sh                  # Render start phase (entrypoint)
 └── README.md
@@ -220,6 +221,8 @@ npm test          # Vitest (suite completa)
 |------|--------|---------|---------|
 | Frontend | Vitest + Testing Library | `npm test` (en `gimnasioReact/`) | Componentes, hooks y utilidades |
 | Backend | pytest + pytest-django | `pytest` (en la raíz) | API, modelos, auth, servicios |
+
+> Las dependencias de test del backend salen de `requirements-dev.txt` (`pip install -r requirements-dev.txt`). En producción Render instala solo `requirements.txt`.
 
 ---
 
