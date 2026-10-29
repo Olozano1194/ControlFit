@@ -1,0 +1,36 @@
+#!/bin/sh
+# pre-push: gate completo antes de subir (regla dura del proyecto).
+# NO valida aprobacion humana: eso es una regla de flujo en AGENTS.md.
+# Escape hatch solo para emergencias: SKIP_GATE=1 git push ...
+
+if [ "${SKIP_GATE:-0}" = "1" ]; then
+    echo "  pre-push: SKIP_GATE=1, se omite el gate." >&2
+    exit 0
+fi
+
+set -e
+
+ROOT=$(git rev-parse --show-toplevel)
+cd "$ROOT"
+
+if [ -x "env/Scripts/python.exe" ]; then
+    PYTHON="env/Scripts/python.exe"
+elif [ -x "env/bin/python" ]; then
+    PYTHON="env/bin/python"
+else
+    PYTHON="python"
+fi
+
+echo "  pre-push: backend check + tests ($PYTHON)..."
+"$PYTHON" manage.py check
+"$PYTHON" -m pip check
+"$PYTHON" manage.py test gimnasioApp
+
+if [ -d "gimnasioReact/node_modules" ]; then
+    echo "  pre-push: frontend typecheck + lint + tests..."
+    (cd gimnasioReact && npx tsc -b && npm run lint && npm test)
+else
+    echo "  pre-push: gimnasioReact/node_modules no existe; se omite el gate frontend." >&2
+fi
+
+exit 0
