@@ -49,9 +49,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         // Token válido: continuar
         setIsAuthenticated(true);
         await loadUser();
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Error 401: token expirado/inválido → limpiar y redirigir
-        if (error.response?.status === 401) {
+        const axiosError = error as { response?: { status?: number } };
+        if (axiosError.response?.status === 401) {
           clearAccessToken();
           window.location.href = '/login';
           return;
@@ -64,7 +65,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
     };
     initAuth();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadUser = async (): Promise<AuthUser | null> => {
