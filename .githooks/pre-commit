@@ -1,0 +1,40 @@
+#!/bin/sh
+# pre-commit: gate de verificacion (regla dura del proyecto).
+# NO valida aprobacion humana: eso es una regla de flujo en AGENTS.md.
+# Escape hatch solo para emergencias: SKIP_GATE=1 git commit ...
+
+if [ "${SKIP_GATE:-0}" = "1" ]; then
+    echo "  pre-commit: SKIP_GATE=1, se omite el gate." >&2
+    exit 0
+fi
+
+set -e
+
+ROOT=$(git rev-parse --show-toplevel)
+cd "$ROOT"
+
+fail=0
+
+# 1) Los archivos NUEVOS de codigo no pueden superar 250 lineas.
+added=$(git diff --cached --name-only --diff-filter=A | grep -E '\.(ts|tsx|js|jsx|py)$' || true)
+for f in $added; do
+    [ -f "$f" ] || continue
+    lines=$(wc -l < "$f")
+    if [ "$lines" -gt 250 ]; then
+        echo "  pre-commit: '$f' tiene $lines lineas (maximo 250)." >&2
+        fail=1
+    fi
+done
+
+if [ "$fail" -ne 0 ]; then
+    echo "  Parti el archivo por responsabilidad antes de commitear." >&2
+    exit 1
+fi
+
+# 2) Si hay cambios en el frontend, correr typecheck + lint.
+if git diff --cached --name-only | grep -q '^gimnasioReact/'; then
+    echo "  pre-commit: frontend typecheck + lint..."
+    (cd gimnasioReact && npx tsc -b && npm run lint)
+fi
+
+exit 0
