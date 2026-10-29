@@ -13,9 +13,18 @@ set -e
 ROOT=$(git rev-parse --show-toplevel)
 cd "$ROOT"
 
-echo "  pre-push: backend check + tests..."
-python manage.py check
-python manage.py test gimnasioApp
+if [ -x "env/Scripts/python.exe" ]; then
+    PYTHON="env/Scripts/python.exe"
+elif [ -x "env/bin/python" ]; then
+    PYTHON="env/bin/python"
+else
+    PYTHON="python"
+fi
+
+echo "  pre-push: backend check + tests ($PYTHON)..."
+"$PYTHON" manage.py check
+"$PYTHON" -m pip check
+"$PYTHON" manage.py test gimnasioApp
 
 if [ -d "gimnasioReact/node_modules" ]; then
     echo "  pre-push: frontend typecheck + lint + tests..."
