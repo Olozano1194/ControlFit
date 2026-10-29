@@ -4,3 +4,7 @@
 
 pytest==9.1.1
 pytest-django==4.14.0
+
+# Solo para desarrollo local con MySQL (.env.example). No se instala en
+# produccion (Postgres) ni en CI (SQLite), y evita compilar mysqlclient en Ubuntu.
+mysqlclient==2.2.6
