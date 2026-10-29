@@ -14,11 +14,11 @@ jobs:
       - run: python manage.py check
         env:
           SECRET_KEY: ci-test-key-not-for-production
-          DATABASE_URL: ""
+          DATABASE_URL: "sqlite:///:memory:"
       - run: python manage.py test gimnasioApp
         env:
           SECRET_KEY: ci-test-key-not-for-production
-          DATABASE_URL: ""
+          DATABASE_URL: "sqlite:///:memory:"
 
   frontend:
     runs-on: ubuntu-latest
