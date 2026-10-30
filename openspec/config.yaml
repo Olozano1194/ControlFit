@@ -1,4 +1,4 @@
-# openspec/config.yaml — SDD project configuration for ControlFit
+# openspec/config.yaml - SDD project configuration for ControlFit
 schema: spec-driven
 
 context: |
@@ -15,10 +15,17 @@ context: |
     relacion_id, created_by, gimnasio, created_at).
   Pending change: backend calendar module (models TipoEvento + EventoCalendario, serializers,
   viewsets, urls) to make existing frontend work.
+  SDD skill rule: every SDD phase MUST load and follow the relevant skills under
+  `.agents/skills/` based on the area touched (frontend: react-patterns, accessibility,
+  frontend-design; frontend public/marketing: seo (conditional); backend: django-expert,
+  django-patterns, django-security; integration: django-react-integration; testing:
+  python-testing-patterns, python-patterns; scripts: bash-defensive-patterns). Do not
+  reimplement patterns already documented there.
 
 rules:
   proposal:
     - Include rollback plan for risky changes
+    - Identify and load the relevant skills under `.agents/skills/` for the touched area
   specs:
     - Use Given/When/Then for scenarios
     - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
@@ -26,18 +33,23 @@ rules:
   design:
     - Follow existing patterns: `gimnasio` FK + MultiTenantViewSetMixin, DefaultRouter registration
     - Document architecture decisions with rationale
+    - Reference the loaded skills' patterns where applicable
   tasks:
     - Group by phase, use hierarchical numbering
     - Keep tasks completable in one session
+    - Each task SHOULD name the skill(s) it relies on
   apply:
     guidelines:
       - Follow existing code patterns (camelCase fields like dateInitial, db_table Meta, Spanish comments)
+      - Load and follow the relevant skills under `.agents/skills/` for the touched area before writing code
     tdd: true
     test_command: "python manage.py test gimnasioApp"
   verify:
     test_command: "python manage.py test gimnasioApp"
     build_command: "python manage.py check"
     coverage_threshold: 0
+    guidelines:
+      - Verify that implementation follows the loaded skills' patterns
   archive:
     - Warn before merging destructive deltas
 
@@ -57,3 +69,8 @@ testing:
     linter: "eslint (npm run lint)"
     typechecker: "tsc (npm run build)"
     formatter: false
+
+skills:
+  path: ".agents/skills/"
+  required: true
+  rule: "Load the SKILL.md of every skill relevant to the touched area before implementing; follow its patterns and do not reimplement them."
